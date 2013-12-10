@@ -22,27 +22,27 @@ class PriorityQueue(object):
 	REMOVED = 'removed-event'
 
 	def __init__(self):
-		self.pq = []
-		self.entries = {}
+		self._pq = []
+		self._entries = {}
 	def add(self, time, event, entity):
 		"""
 		Add an entity event to the queue.
 		"""
 		key = (event, entity) # must be an unique key
-		if key in self.entries:
+		if key in self._entries:
 			self._remove_event(key)
 		entry = [time, event, entity]
-		self.entries[key] = entry
-		heapq.heappush(self.pq, entry)
+		self._entries[key] = entry
+		heapq.heappush(self._pq, entry)
 	def pop(self):
 		"""
 		Remove and return the next upcoming event.
 		Return 'None' if queue is empty.
 		"""
 		if not self.empty():
-			time, event, entity = heapq.heappop(self.pq)
+			time, event, entity = heapq.heappop(self._pq)
 			key = (event, entity)
-			del self.entries[key]
+			del self._entries[key]
 			return time, event, entity
 		raise KeyError('pop from an empty priority queue')
 	def empty(self):
@@ -50,19 +50,19 @@ class PriorityQueue(object):
 		Check if queue is empty.
 		"""
 		self._pop_removed()
-		return bool(self.pq)
+		return bool(self._pq)
 	def _remove_event(self, key):
 		"""
 		Mark an existing event as removed.
 		"""
-		entry = self.entries.pop(key)
+		entry = self._entries.pop(key)
 		entry[-1] = self.REMOVED
 	def _pop_removed(self):
 		"""
 		Process the queue to the first non-removed event.
 		"""
-		while self.pq and self.pq[0][-1] == self.REMOVED:
-			heapq.heappop(self.pq)
+		while self._pq and self._pq[0][-1] == self.REMOVED:
+			heapq.heappop(self._pq)
 
 
 class BaseSimulator(object):
@@ -124,17 +124,15 @@ class BaseSimulator(object):
 		# return simulation results
 		return self.results
 
-	def _distribute_virtual(self, period):
+	def _distribute_virtual(self, value):
 		""" Distribute virtual time shares to active users.
 		"""
 		if self.total_shares:
-			one_share = float(period)/self.total_shares
+			one_share = float(value)/self.total_shares
 			one_share *= self.cpu_used
 			for u in self.users:
 				if u.active:
-					u.virtual += one_share * u.shares
-					#TODO zle -> od razu dodawac czas do pierwszej nie skonczonej kampani
-					#TODO aka active_camps[0]?
+					u.virtual_work(one_share * u.shares)
 
 	def new_job_event(job, time, last_time):
 		"""

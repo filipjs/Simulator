@@ -19,7 +19,7 @@ class Job(object):
 	def ID(self):
 		return self._stats['id']
 	@property
-	def userID(self):
+	def user(self):
 		return self._stats['user']
 	@property
 	def proc(self):
@@ -58,77 +58,94 @@ class Job(object):
 			self.submit, self.start_time,
 			self.run_time, self.estimate)
 
+
 class Campaign(object):
 	"""
 	A user campaign with the appropriate jobs.
 	A campaign is 'active' if it is still running in the virtual schedule.
-	A campaign is 'completed' if it ended in the virtual AND the real schedule.
 	"""
-	def __init__(self, user, time_stamp):
+	def __init__(self, id, user, time_stamp):
+		self._id = id
 		self._user = user
-		self._id = user.campID
   		self._created = time_stamp
 		self._remaining = 0
 		self._completed = 0
 		self.virtual = 0
 		self.offset = 0
-		self._jobs = []
+		self._active_jobs = []
+		self._completed_jobs = []
 	@property
 	def ID(self):
 		return self._id
 	@property
-	def created(self):
-		return self._created
-	@property
 	def user(self):
 		return self._user
+	@property
+	def created(self):
+		return self._created
 	@property
 	def workload(self):
 		return self._remaining + self._completed
 	@property
-	def active(self):
-		return self.workload - self.virtual > 0
+	def time_left(self):
+		return self.workload - self.virtual
 	@property
-	def completed(self):
-		return not self.active and not self._jobs
+	def active(self):
+		return self.time_left > 0
 	def add_job(self, job):
 		self._remaining += job.estimate * job.proc
-		self._jobs.append(job)
+		self._active_jobs.append(job)
 		job.camp = self # forward link
 	def job_ended(self, job):
 		self._remaining -= job.estimate * job.proc
-		self._completed += job.runtime * job.proc
-		self._jobs.remove(job)
+		self._completed += job.run_time * job.proc
+		self._active_jobs.remove(job)
+		self._completed_jobs.append(job)
 	def sort_jobs(self, job_cmp):
-		self._jobs = sorted(self._jobs, key=functools.cmp_to_key(job_cmp))
-		#TODO teraz do kazdej pracy dodac pole 'kolejnosc w kampani' zeby
-		# nie musiec robic za kazdym razem _jobs.index(job)
+		self._active_jobs = sorted(
+			self._active_jobs,
+			key=functools.cmp_to_key(job_cmp)
+		)
+		for i, job in enumerate(self._active_jobs):
+			job.camp_index = i # position in the list
+
 
 class User(object):
 	"""
-	User account with campaign list and fair-share usage.
+	User account with campaign list and usage stats.
 	Campaigns are sorted by creation time.
 	Ended_jobs are sorted by execution end time.
 	"""
 	def __init__(self, uid):
 		self._id = uid
-		self._camp_counter = 0
-		self._camps = []
+		self._active_camps = []
+		self._completed_camps = []
+		self.shares = None
 	def reset(self):
-		assert not self._camps
-		self.virtual = 0
+		assert not self._active_camps
+		self.lost_virtual = 0
 		self.raw_usage = 0
 		self.fair_share = 0
-		self.ended_jobs = []
+		self.completed_jobs = []
 	@property
 	def ID(self):
 		return self._id
 	@property
-	def campID(self):
-		return self._camp_counter
-	@property
 	def active(self):
-		return self._camps and self._camps[-1].active
+		return bool(self._active_camps)
+
+	def virtual_work(self, value):
+		total = reduce(lambda x, y: x + y.virtual, self._active_camps, value)
+		offset = 0
+		for camp in self._active_camps:
+			virt = min(camp.workload, total)
+			camp.virtual = virt
+			total -= virt
+			camp.offset = offset
+			offset += camp.time_left
+		# overflow from 'total' is lost
+		self.lost_virtual += total
+
 	def add_job(self, job, threshold):
 		last_camp = self._camps and self._camps[-1]
 		if not last_camp or job.submit > last_camp.created + threshold:
