@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-import functools
-
 
 class Job(object):
 	"""
@@ -58,7 +56,6 @@ class Job(object):
 			self.submit, self.start_time,
 			self.run_time, self.estimate)
 
-
 class Campaign(object):
 	"""
 	A user campaign with the appropriate jobs.
@@ -102,13 +99,9 @@ class Campaign(object):
 		self._active_jobs.remove(job)
 		self._completed_jobs.append(job)
 	def sort_jobs(self, job_cmp):
-		self._active_jobs = sorted(
-			self._active_jobs,
-			key=functools.cmp_to_key(job_cmp)
-		)
+		self._active_jobs.sort(key=job_key)
 		for i, job in enumerate(self._active_jobs):
 			job.camp_index = i # position in the list
-
 
 class User(object):
 	"""

@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import functools
 import heapq
+import math
 from abc import ABCMeta
-from entities import * #TODO remove *
+from entities import Job, Campaign, User
 
 
 class Events(object):
@@ -84,7 +84,7 @@ class BaseSimulator(object):
 		"""
 		self.results = []
 
-		self.prev_events = {}
+		self.prev_event = None
 		self.pq = PriorityQueue()
 
 		count = 0
@@ -102,7 +102,7 @@ class BaseSimulator(object):
 			time, event, entity = self.pq.pop()
 
 			# if it is the first event then last_time = time
-			last_time = self.prev_events.get(event, time)
+			last_time = self.prev_event or time
 
 			if event == Events.new_job:
 				self._new_job_event(entity, time, last_time)
@@ -119,55 +119,69 @@ class BaseSimulator(object):
 			else:
 				raise Exception('unknown event')
 
-			# update events time
-			self.prev_events[event] = time
+			# update event time
+			self.prev_event = time
 		# return simulation results
 		return self.results
 
-	def _distribute_virtual(self, value):
+	def _share_value(self, user):
+		"""
+		"""
+		share = float(u.shares) / self.total_shares
+		return share * self.cpu_used
+
+	def _distribute_virtual(self, period):
 		""" Distribute virtual time shares to active users.
 		"""
-		if self.total_shares:
-			one_share = float(value)/self.total_shares
-			one_share *= self.cpu_used
-			for u in self.users:
-				if u.active:
-					u.virtual_work(one_share * u.shares)
+		for u in self.users:
+			if u.active:
+				u.virtual_work(period * self._share_value(u))
 
-	def new_job_event(job, time, last_time):
+	def _update_camp_events(self, time):
+		"""
+		"""
+		for u in self.users:
+			if u.active:
+				first_camp = u._active_camps[0]
+				est = first_camp.time_left / self._share_value(u)
+				est = time + int(math.ceil(est))
+				self.pq.add(
+					est,
+					Events.campaign_end.
+					first_camp
+				)
+
+	def new_job_event(self, job, time, last_time):
 		"""
 		"""
 		self._distribute_virtual(time - last_time)
 
 		user = self.users[job.userID]
+		if not user.active:
+			# user is active after this job submission
+			self.total_shares += user.shares
 
 		camp = self._add_new_job(user, job)
 		camp.sort_jobs(self._camp_job_cmp)
 
-		# !! niepotrzebe przeliczac priority wszystkich prac
-		# !! wystarzcy ze praca wie jaki jest REMAINING WORK (nie ma potrzeby end time)
-		# !! swojej kampani, creation time
-		# !! i pozycja wewnatrz bo wtedy mozna sortowac
-		# sort tuples <end time, creation time, camp position>
-		# TODO zamiast camp position mozna po prostu uzyc 'runtime' bo wiemy ze tak sortujemy??
-		# TODO ale jak wtedy podmienic funkcje sortujaca
+		self.waiting_jobs.append(job)
+		self.waiting_jobs.sort(key=self._priority_job_key)
 
-		#1) < cpu limit & empty queue
-		#2) < cpu limit & queue & backfill
+		self._schedule()
+		self._backfill()
 
-		#(teraz juz po dodaniu pracy i ew. zwiekszeniu liczby cpu)
-		#3) przeliczyc end time wszystkich(?) kampani
-		#4) dodac pierwsze kampanie jako event <end camp> z nowym czasem
-
+		# this can be done only after scheduling the new job,
+		# becuase it can change the number of cpus used
+		self._update_camp_events(time)
 
 	@abstractmethod
-	def job_end_event(job, time, last_time):
+	def job_end_event(self, job, time, last_time):
 		raise NotImplemented
 	@abstractmethod
-	def new_camp_event(camp, time, last_time):
+	def new_camp_event(self, camp, time, last_time):
 		raise NotImplemented
 	@abstractmethod
-	def camp_end_event(camp, time, last_time):
+	def camp_end_event(self, camp, time, last_time):
 		raise NotImplemented
 
 	@abstractmethod
@@ -178,7 +192,12 @@ class BaseSimulator(object):
 		"""
 		raise NotImplemented
 	@abstractmethod
-	def _camp_job_cmp(self, x, y):
-		""" Job comperator for the inner campaign sort.
+	def _camp_job_key(self, job):
+		""" Job key function for the inner campaign sort.
 		"""
 		raise NotImplemented
+
+	def _priority_job_key(self, job):
+		"""
+		"""
+		return (job.camp.time_left, job.camp.created, job.camp_index)
