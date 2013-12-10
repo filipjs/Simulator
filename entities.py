@@ -9,6 +9,7 @@ class Job(object):
 	def __init__(self, stats):
 		self._stats = stats
 		self.estimate = None
+
 	def reset(self):
 		self._camp = None
 		self._start = None
@@ -44,12 +45,15 @@ class Job(object):
 	def camp(self, v):
 		assert self._camp is None
 		self._camp = v
+
 	def start_execution(self, t):
-		assert not self._completed
+		assert self.start_time is None
 		self._start = t
+
 	def execution_ended(self, t):
 		assert self.end_time == t
 		self._completed = True
+
 	def __str__(self):
 		return "{} {} {} {} {} {} {} {}".format(self.ID,
 			self.userID, self.camp.ID, self.proc,
@@ -89,15 +93,18 @@ class Campaign(object):
 	@property
 	def active(self):
 		return self.time_left > 0
+
 	def add_job(self, job):
 		self._remaining += job.estimate * job.proc
 		self._active_jobs.append(job)
 		job.camp = self # forward link
+
 	def job_ended(self, job):
 		self._remaining -= job.estimate * job.proc
 		self._completed += job.run_time * job.proc
 		self._active_jobs.remove(job)
 		self._completed_jobs.append(job)
+
 	def sort_jobs(self, job_cmp):
 		self._active_jobs.sort(key=job_key)
 		for i, job in enumerate(self._active_jobs):
@@ -114,6 +121,7 @@ class User(object):
 		self._active_camps = []
 		self._completed_camps = []
 		self.shares = None
+
 	def reset(self):
 		assert not self._active_camps
 		self.lost_virtual = 0
@@ -138,37 +146,3 @@ class User(object):
 			offset += camp.time_left
 		# overflow from 'total' is lost
 		self.lost_virtual += total
-
-	def add_job(self, job, threshold):
-		last_camp = self._camps and self._camps[-1]
-		if not last_camp or job.submit > last_camp.created + threshold:
-			self._camp_counter += 1
-			last_camp = Campaign(self, job.submit)
-			self._camps.append(last_camp)
-		last_camp.add_job(job)
-	def job_ended(self, job):
-		#TODO MEH?
-		self.ended_jobs.append(job)
-		job.camp.job_ended(job)
-
-
-def parse_workload(swf_file, serial):
-	"""
-	Parse a workload file and return a list of "Jobs":
-		- swf_file - path to workload file
-		- serial - change parallel jobs to multiple serial ones
-	"""
-	jobs = []
-	for line in open(swf_file):
-		if line[0] != ';': # skip comments
-			stats = map(int, line.split())
-			if stats[SWF.run_time] <= 0 or stats[SWF.proc] <= 0:
-				continue
-			if serial:
-				count = stats[SWF.proc]
-				stats[SWF.proc] = 1
-			else:
-				count = 1
-			for i in range(count):
-				jobs.append( Job(stats) )
-	return jobs
