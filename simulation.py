@@ -9,8 +9,8 @@ from entities import Job, Campaign, User
 
 class Events(object):
 	"""
-	Ordering of events is important, it is used
-	in priority queue to break ties.
+	The ordering of the events is important,
+	it is used in a priority queue to break ties.
 	"""
 	new_job = 0
 	job_end = 1
@@ -27,20 +27,22 @@ class PriorityQueue(object):
 	def __init__(self):
 		self._pq = []
 		self._entries = {}
+
 	def add(self, time, event, entity):
 		"""
 		Add an entity event to the queue.
 		"""
-		key = (event, entity) # must be an unique key
+		key = (event, entity) # must be a unique key
 		if key in self._entries:
 			self._remove_event(key)
 		entry = [time, event, entity]
 		self._entries[key] = entry
 		heapq.heappush(self._pq, entry)
+
 	def pop(self):
 		"""
 		Remove and return the next upcoming event.
-		Return 'None' if queue is empty.
+		Raise KeyError if queue is empty.
 		"""
 		if not self.empty():
 			time, event, entity = heapq.heappop(self._pq)
@@ -48,18 +50,21 @@ class PriorityQueue(object):
 			del self._entries[key]
 			return time, event, entity
 		raise KeyError('pop from an empty priority queue')
+
 	def empty(self):
 		"""
 		Check if queue is empty.
 		"""
 		self._pop_removed()
 		return bool(self._pq)
+
 	def _remove_event(self, key):
 		"""
 		Mark an existing event as removed.
 		"""
 		entry = self._entries.pop(key)
 		entry[-1] = self.REMOVED
+
 	def _pop_removed(self):
 		"""
 		Process the queue to the first non-removed event.
@@ -71,6 +76,7 @@ class PriorityQueue(object):
 class BaseSimulator(object):
 	"""
 	"""
+
 	__metaclass__ = ABCMeta
 
 	def __init__(self, jobs, users, cpus):
@@ -104,18 +110,17 @@ class BaseSimulator(object):
 			# the queue cannot be empty here
 			time, event, entity = self.pq.pop()
 
-			# if it is the first event then last_time = time
-			last_time = self.prev_event or time
+			if self.prev_event is not None:
+				self._process_period(time - self.prev_event)
 
 			if event == Events.new_job:
-				self._new_job_event(entity, time, last_time)
+				self._new_job_event(entity, time)
 			elif event == Events.job_end:
-				self.job_end_event(entity, time, last_time)
+				self.job_end_event(entity, time)
 			elif event == Events.campaign_end:
-				self.camp_end_event(entity, time, last_time)
+				self.camp_end_event(entity, time)
 			else:
 				raise Exception('unknown event')
-
 			# update event time
 			self.prev_event = time
 		# return simulation results
@@ -137,7 +142,7 @@ class BaseSimulator(object):
 				u.virtual_work(period * self._share_value(u))
 			u.real_work(period)
 
-	def _update_camp_events(self, time):
+	def _update_camp_estimates(self, time):
 		"""
 		Update estimated end times of campaigns.
 		Only the first campaign is considered from each user,
@@ -154,11 +159,9 @@ class BaseSimulator(object):
 					first_camp
 				)
 
-	def new_job_event(self, job, time, last_time):
+	def new_job_event(self, job, time):
 		"""
 		"""
-		self._process_period(time - last_time)
-
 		if not job.user.active:
 			# user will be now active after this job submission
 			self.total_shares += job.user.ost_shares
@@ -177,13 +180,11 @@ class BaseSimulator(object):
 
 		if prev_used != self.cpu_used:
 			# we need to recalculate the campaign estimates
-			self._update_camp_events(time)
+			self._update_camp_estimates(time)
 
-	def job_end_event(self, job, time, last_time):
+	def job_end_event(self, job, time):
 		"""
 		"""
-		self._process_period(time - last_time)
-
 		job.execution_ended(time)
 		# the job estimated run time could be different from the
 		# real run time, so we need to redistribute any extra
@@ -201,13 +202,11 @@ class BaseSimulator(object):
 
 		if prev_used != self.cpu_used:
 			# we need to recalculate the campaign estimates
-			self._update_camp_events(time)
+			self._update_camp_estimates(time)
 
-	def camp_end_event(self, camp, time, last_time):
+	def camp_end_event(self, camp, time):
 		"""
 		"""
-		self._process_period(time - last_time)
-
 		assert camp.user.active_camps[0] == camp
 		assert camp.time_left == 0
 
@@ -218,7 +217,7 @@ class BaseSimulator(object):
 			# user became inactive
 			self.total_shares -= camp.user.ost_shares
 			# we need to recalculate the campaign estimates
-			self._update_camp_events(time)
+			self._update_camp_estimates(time)
 	@abstractmethod
 	def _find_campaign(self, user, job):
 		"""
