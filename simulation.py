@@ -161,7 +161,7 @@ class BaseSimulator(object):
 
 		if not job.user.active:
 			# user will be now active after this job submission
-			self.total_shares += user.shares
+			self.total_shares += job.user.ost_shares
 
 		camp = self._find_campaign(job.user, job)
 		camp.add_job(job)
@@ -170,13 +170,14 @@ class BaseSimulator(object):
 		self.waiting_jobs.append(job)
 		self.waiting_jobs.sort(key=self._job_priority_key)
 
+		prev_used = self.cpu_used
+
 		self._schedule()
 		self._backfill()
 
-		# this can be done only after a scheduling pass,
-		# because the new job can change the number of cpus used
-		# and the following estimates would be inaccurate
-		self._update_camp_events(time)
+		if prev_used != self.cpu_used:
+			# we need to recalculate the campaign estimates
+			self._update_camp_events(time)
 
 	def job_end_event(self, job, time, last_time):
 		"""
@@ -189,6 +190,8 @@ class BaseSimulator(object):
 		# virtual time from the mentioned difference
 		job.user.virtual_work(0)
 
+		prev_used = self.cpu_used
+
 		# 'remove' the job from the processors
 		self.running_jobs.remove(job)
 		self.cpu_used -= job.proc
@@ -196,14 +199,26 @@ class BaseSimulator(object):
 		self._schedule()
 		self._backfill()
 
-		# this can be done only after a scheduling pass,
-		# because the new job can change the number of cpus used
-		# and the following estimates would be inaccurate
-		self._update_camp_events(time)
+		if prev_used != self.cpu_used:
+			# we need to recalculate the campaign estimates
+			self._update_camp_events(time)
 
 	def camp_end_event(self, camp, time, last_time):
-		raise NotImplemented
-		#TODO zmienic event na remove active user?
+		"""
+		"""
+		self._process_period(time - last_time)
+
+		assert camp.user.active_camps[0] == camp
+		assert camp.time_left == 0
+
+		camp.user.active_camps.pop(0)
+		camp.user.completed_camps.append(camp)
+
+		if not camp.user.active:
+			# user became inactive
+			self.total_shares -= camp.user.ost_shares
+			# we need to recalculate the campaign estimates
+			self._update_camp_events(time)
 	@abstractmethod
 	def _find_campaign(self, user, job):
 		"""
