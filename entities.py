@@ -50,16 +50,23 @@ class Job(object):
 	def start_execution(self, t):
 		assert self.start_time is None
 		self._start = t
+		# notify further
+		self._camp.job_started(self)
+		self._user.job_started(self)
 
 	def execution_ended(self, t):
 		assert self.end_time == t
 		self._completed = True
+		# notify further
+		self._camp.job_ended(self)
+		self._user.job_ended(self)
 
 	def __str__(self):
 		return "{} {} {} {} {} {} {} {}".format(self.ID,
 			self.user.ID, self.camp.ID, self.proc,
 			self.submit, self.start_time,
 			self.run_time, self.estimate)
+
 
 class Campaign(object):
 	"""
@@ -74,8 +81,8 @@ class Campaign(object):
 		self._completed = 0
 		self.virtual = 0
 		self.offset = 0
-		self._active_jobs = []
-		self._completed_jobs = []
+		self.active_jobs = []
+		self.completed_jobs = []
 	@property
 	def ID(self):
 		return self._id
@@ -97,53 +104,70 @@ class Campaign(object):
 
 	def add_job(self, job):
 		self._remaining += job.estimate * job.proc
-		self._active_jobs.append(job)
+		self.active_jobs.append(job)
 		job.camp = self # backward link
+
+	def job_started(self, job):
+		pass
 
 	def job_ended(self, job):
 		self._remaining -= job.estimate * job.proc
 		self._completed += job.run_time * job.proc
-		self._active_jobs.remove(job)
-		self._completed_jobs.append(job)
+		self.active_jobs.remove(job)
+		self.completed_jobs.append(job)
 
 	def sort_jobs(self, job_cmp):
-		self._active_jobs.sort(key=job_key)
-		for i, job in enumerate(self._active_jobs):
+		self.active_jobs.sort(key=job_key)
+		for i, job in enumerate(self.active_jobs):
 			job.camp_index = i # position in the list
+
 
 class User(object):
 	"""
-	User account with campaign list and usage stats.
-	Campaigns are sorted by creation time.
-	Ended_jobs are sorted by execution end time.
+	User account with campaign lists and usage stats.
+	Active_camps are ordered by creation time.
+	Completed_camps are ordered by virtual end time.
+	Completed_jobs are ordered by execution end time.
 	"""
 	def __init__(self, uid):
 		self._id = uid
-		self._active_camps = []
-		self._completed_camps = []
-		self.shares = None
+		self.active_camps = []
+		self.completed_camps = []
+		self.ost_shares = None
+		self.fair_shares = None
 
 	def reset(self):
-		assert not self._active_camps
-		self.lost_virtual = 0
-		self.raw_usage = 0
-		self.fair_share = 0
+		assert not self.active_camps
+		assert not self._occupied_cpus
+		self._lost_virtual = 0
+		self._cpu_clock = 0
+		self._occupied_cpus = 0
 		self.completed_jobs = []
 	@property
 	def ID(self):
 		return self._id
 	@property
 	def active(self):
-		return bool(self._active_camps)
+		return bool(self.active_camps)
 
 	def virtual_work(self, value):
-		total = reduce(lambda x, y: x + y.virtual, self._active_camps, value)
+		total = reduce(lambda x, y: x + y.virtual, self.active_camps, value)
 		offset = 0
-		for camp in self._active_camps:
+		for camp in self.active_camps:
 			virt = min(camp.workload, total)
 			camp.virtual = virt
 			total -= virt
 			camp.offset = offset
 			offset += camp.time_left
 		# overflow from 'total' is lost
-		self.lost_virtual += total
+		self._lost_virtual += total
+
+	def real_work(self, value):
+		self._cpu_clock += self._occupied_cpus * value
+
+	def job_started(self, job):
+		self._occupied_cpus += job.proc
+
+	def job_ended(self, job):
+		self._occupied_cpus -= job.proc
+		self.completed_jobs.append(job)

@@ -127,40 +127,45 @@ class BaseSimulator(object):
 		share = float(u.shares) / self.total_shares
 		return share * self.cpu_used
 
-	def _distribute_virtual(self, period):
-		""" Distribute virtual time shares to active users.
+	def _process_period(self, period):
+		"""
+		Distribute virtual time to active users.
+		Also account real work done by all users.
 		"""
 		for u in self.users:
 			if u.active:
 				u.virtual_work(period * self._share_value(u))
+			u.real_work(period)
 
 	def _update_camp_events(self, time):
 		"""
+		Update estimated end times of campaigns.
+		Only the first campaign is considered from each user,
+		since the subsequent campaings are guaranteed to end later.
 		"""
 		for u in self.users:
 			if u.active:
-				first_camp = u._active_camps[0]
+				first_camp = u.active_camps[0]
 				est = first_camp.time_left / self._share_value(u)
 				est = time + int(math.ceil(est))
 				self.pq.add(
 					est,
-					Events.campaign_end.
+					Events.campaign_end,
 					first_camp
 				)
 
 	def new_job_event(self, job, time, last_time):
 		"""
 		"""
-		self._distribute_virtual(time - last_time)
+		self._process_period(time - last_time)
 
-		user = self.users[job.user]
-		if not user.active:
-			# user is active after this job submission
+		if not job.user.active:
+			# user will be now active after this job submission
 			self.total_shares += user.shares
 
-		camp = self._find_campaign(user, job)
+		camp = self._find_campaign(job.user, job)
 		camp.add_job(job)
-		camp.sort_jobs(self._job_camp_key)
+		camp.sort_jobs(key=self._job_camp_key)
 
 		self.waiting_jobs.append(job)
 		self.waiting_jobs.sort(key=self._job_priority_key)
@@ -168,34 +173,32 @@ class BaseSimulator(object):
 		self._schedule()
 		self._backfill()
 
-		# this can be done only after scheduling the new job,
-		# because it can change the number of cpus used
+		# this can be done only after a scheduling pass,
+		# because the new job can change the number of cpus used
+		# and the following estimates would be inaccurate
 		self._update_camp_events(time)
 
 	def job_end_event(self, job, time, last_time):
 		"""
 		"""
+		self._process_period(time - last_time)
 
-		# notify the campaign
-		job.camp.job_ended(job)
-		# and only now redistribute virtual time
-		self._distribute_virtual(time - last_time)
-		#TODO trzeba przeciez liczyc raw_usage na biezaco
-		#tak samo jak virtual time...
-
-		user = self.users[job.user]
-		user.completed_jobs.append(job)
+		job.execution_ended(time)
+		# the job estimated run time could be different from the
+		# real run time, so we need to redistribute any extra
+		# virtual time from the mentioned difference
+		job.user.virtual_work(0)
 
 		# 'remove' the job from the processors
-		job.execution_ended(time)
 		self.running_jobs.remove(job)
 		self.cpu_used -= job.proc
 
 		self._schedule()
 		self._backfill()
 
-		# this can be done only after scheduling the new job,
-		# because it can change the number of cpus used
+		# this can be done only after a scheduling pass,
+		# because the new job can change the number of cpus used
+		# and the following estimates would be inaccurate
 		self._update_camp_events(time)
 
 	def camp_end_event(self, camp, time, last_time):
