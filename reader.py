@@ -1,13 +1,32 @@
 # -*- coding: utf-8 -*-
 from abc import ABCMeta
-from entities import Job
+from entities import Job, User
 
 
 class BaseReader(object):
 	__metaclass__ = ABCMeta
 
+	def parse_workload(self, filename, serial):
+		"""
+		A wrapper around the main parse method overloaded in subclasses.
+		"""
+		self.jobs = []
+		self.users = {}
+		self._parse(filename, serial)
+		return self.jobs
+
+	def _next_job(self, stats):
+		"""
+		Add the job to the result list.
+		Replace the user id with a `User` instance.
+		"""
+		uid = stats['user']
+		if uid not in self.users:
+			self.users[uid] = User(uid)
+		self.jobs.append( Job(stats, self.users[uid]) )
+
 	@abstractmethod
-	def parse(self, filename, serial):
+	def _parse(self, filename, serial):
 		"""
 		Parse a workload file and return a list of "Jobs":
 			- filenamae - path to workload file
@@ -28,35 +47,33 @@ class SwfReader(BaseReader):
 	user_id = 11
 	partition = 15
 
-	def parse(self, filename, serial):
-		jobs = []
-		for line in open(swf_file):
-			if line[0] != ';': # skip comments
-				stats = map(int, line.split())
-				if stats[SWF.run_time] <= 0 or stats[SWF.proc] <= 0:
-					continue
-				if serial:
-					count = stats[SWF.proc]
-					stats[SWF.proc] = 1
-				else:
-					count = 1
-				for i in range(count):
-					jobs.append(
-						Job({
-							'id': stats[self.job_id],
-							'user': stats[self.user_id],
-							'proc': stats[self.proc],
-							'submit': stats[self.submit],
-							'run_time': stats[self.run_time],
-						})
-					)
-		return jobs
+	def _parse(self, filename, serial):
+		for line in open(filename):
+			if line[0] == ';':
+				continue # skip comments
+			stats = map(int, line.split())
+			if stats[SWF.run_time] <= 0 or stats[SWF.proc] <= 0:
+				continue # skip incomplete data
+			if serial:
+				count = stats[SWF.proc]
+				stats[SWF.proc] = 1
+			else:
+				count = 1
+			for i in range(count):
+				BaseReader.next_job({
+					'id': stats[self.job_id],
+					'user': stats[self.user_id],
+					'proc': stats[self.proc],
+					'submit': stats[self.submit],
+					'run_time': stats[self.run_time],
+				})
+
 
 class ICMReader(BaseReader):
 	"""
 	Field numbers in an ICM log file.
 	"""
 
-	def parse(self, filename, serial):
+	def _parse(self, filename, serial):
 		raise NotImplemented
 		#TODO

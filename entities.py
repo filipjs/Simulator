@@ -6,8 +6,9 @@ class Job(object):
 	Correct usage scheme:
 		reset -> camp.setter -> start_execution -> execution_ended
 	"""
-	def __init__(self, stats):
+	def __init__(self, stats, user):
 		self._stats = stats
+		self._user = user
 		self.estimate = None
 
 	def reset(self):
@@ -19,7 +20,7 @@ class Job(object):
 		return self._stats['id']
 	@property
 	def user(self):
-		return self._stats['user']
+		return self._user
 	@property
 	def proc(self):
 		return self._stats['proc']
@@ -56,7 +57,7 @@ class Job(object):
 
 	def __str__(self):
 		return "{} {} {} {} {} {} {} {}".format(self.ID,
-			self.userID, self.camp.ID, self.proc,
+			self.user.ID, self.camp.ID, self.proc,
 			self.submit, self.start_time,
 			self.run_time, self.estimate)
 

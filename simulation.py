@@ -182,7 +182,7 @@ class BaseSimulator(object):
 		self._distribute_virtual(time - last_time)
 		#TODO trzeba przeciez liczyc raw_usage na biezaco
 		#tak samo jak virtual time...
-		
+
 		user = self.users[job.user]
 		user.completed_jobs.append(job)
 
