@@ -8,10 +8,13 @@ from entities import Job, Campaign, User
 
 
 class Events(object):
+	"""
+	Ordering of events is important, it is used in priority
+	queue for breaking ties.
+	"""
 	new_job = 0
 	job_end = 1
-	new_campaign = 2
-	campaign_end = 3
+	campaign_end = 2
 
 
 class PriorityQueue(object):
@@ -106,15 +109,9 @@ class BaseSimulator(object):
 
 			if event == Events.new_job:
 				self._new_job_event(entity, time, last_time)
-				#TODO run job if free cpu + backfill?
 			elif event == Events.job_end:
 				self.job_end_event(entity, time, last_time)
-				#TODO run job if in queue + backfill
-			elif event == Events.new_campaign:
-				#TODO zmienic event na new active user?
-				self.new_camp_event(entity, time, last_time)
 			elif event == Events.campaign_end:
-				#TODO zmienic event na remove active user?
 				self.camp_end_event(entity, time, last_time)
 			else:
 				raise Exception('unknown event')
@@ -178,12 +175,9 @@ class BaseSimulator(object):
 	def job_end_event(self, job, time, last_time):
 		raise NotImplemented
 	@abstractmethod
-	def new_camp_event(self, camp, time, last_time):
-		raise NotImplemented
-	@abstractmethod
 	def camp_end_event(self, camp, time, last_time):
 		raise NotImplemented
-
+		#TODO zmienic event na remove active user?
 	@abstractmethod
 	def _add_new_job(self, user, job):
 		"""
