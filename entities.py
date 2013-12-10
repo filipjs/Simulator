@@ -1,58 +1,48 @@
 # -*- coding: utf-8 -*-
 import functools
 
-class SWF(object):
-	"""
-	Field numbers in a workload (.swf) file.
-	"""
-	job_id = 0
-	submit = 1
-	wait_time = 2
-	run_time = 3
-	proc = 4
-	user_id = 11
-	partition = 15
 
 class Job(object):
 	"""
 	A single job with the all relevant properties.
 	Correct usage scheme:
-		reset -> setter.camp -> start_execution -> execution_ended
+		reset -> camp.setter -> start_execution -> execution_ended
 	"""
 	def __init__(self, stats):
 		self._stats = stats
+		self.estimate = None
 	def reset(self):
 		self._camp = None
 		self._start = None
 		self._completed = False
 	@property
 	def ID(self):
-		return self._stats[SWF.job_id]
+		return self._stats['id']
 	@property
 	def userID(self):
-		return self._stats[SWF.user_id]
+		return self._stats['user']
 	@property
 	def proc(self):
-		return self._stats[SWF.proc]
+		return self._stats['proc']
 	@property
 	def submit(self):
-		return self._stats[SWF.submit]
+		return self._stats['submit']
 	@property
 	def run_time(self):
-		return self._stats[SWF.run_time]
+		return self._stats['run_time']
 	@property
 	def start_time(self):
 		return self._start
 	@property
 	def end_time(self):
-		return self._start + self.run_time
+		return self.start_time + self.run_time
 	@property
 	def completed(self):
 		return self._completed
 	@property
 	def camp(self):
 		return self._camp
-	@setter.camp
+	@camp.setter
 	def camp(self, v):
 		assert self._camp is None
 		self._camp = v
@@ -63,9 +53,10 @@ class Job(object):
 		assert self.end_time == t
 		self._completed = True
 	def __str__(self):
-		return "{} {} {} {} {} {} {}".format(self.ID,
-			self.userID, self.camp.ID, self.submit,
-			self.start_time, self.run_time, self.proc)
+		return "{} {} {} {} {} {} {} {}".format(self.ID,
+			self.userID, self.camp.ID, self.proc,
+			self.submit, self.start_time,
+			self.run_time, self.estimate)
 
 class Campaign(object):
 	"""
