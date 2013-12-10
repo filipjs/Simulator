@@ -68,7 +68,7 @@ class Campaign(object):
 	def __init__(self, id, user, time_stamp):
 		self._id = id
 		self._user = user
-  		self._created = time_stamp
+		self._created = time_stamp
 		self._remaining = 0
 		self._completed = 0
 		self.virtual = 0
@@ -97,7 +97,7 @@ class Campaign(object):
 	def add_job(self, job):
 		self._remaining += job.estimate * job.proc
 		self._active_jobs.append(job)
-		job.camp = self # forward link
+		job.camp = self # backward link
 
 	def job_ended(self, job):
 		self._remaining -= job.estimate * job.proc

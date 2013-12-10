@@ -9,8 +9,8 @@ from entities import Job, Campaign, User
 
 class Events(object):
 	"""
-	Ordering of events is important, it is used in priority
-	queue for breaking ties.
+	Ordering of events is important, it is used
+	in priority queue to break ties.
 	"""
 	new_job = 0
 	job_end = 1
@@ -153,45 +153,70 @@ class BaseSimulator(object):
 		"""
 		self._distribute_virtual(time - last_time)
 
-		user = self.users[job.userID]
+		user = self.users[job.user]
 		if not user.active:
 			# user is active after this job submission
 			self.total_shares += user.shares
 
-		camp = self._add_new_job(user, job)
-		camp.sort_jobs(self._camp_job_cmp)
+		camp = self._find_campaign(user, job)
+		camp.add_job(job)
+		camp.sort_jobs(self._job_camp_key)
 
 		self.waiting_jobs.append(job)
-		self.waiting_jobs.sort(key=self._priority_job_key)
+		self.waiting_jobs.sort(key=self._job_priority_key)
 
 		self._schedule()
 		self._backfill()
 
 		# this can be done only after scheduling the new job,
-		# becuase it can change the number of cpus used
+		# because it can change the number of cpus used
 		self._update_camp_events(time)
 
-	@abstractmethod
 	def job_end_event(self, job, time, last_time):
-		raise NotImplemented
-	@abstractmethod
+		"""
+		"""
+
+		# notify the campaign
+		job.camp.job_ended(job)
+		# and only now redistribute virtual time
+		self._distribute_virtual(time - last_time)
+		#TODO trzeba przeciez liczyc raw_usage na biezaco
+		#tak samo jak virtual time...
+		
+		user = self.users[job.user]
+		user.completed_jobs.append(job)
+
+		# 'remove' the job from the processors
+		job.execution_ended(time)
+		self.running_jobs.remove(job)
+		self.cpu_used -= job.proc
+
+		self._schedule()
+		self._backfill()
+
+		# this can be done only after scheduling the new job,
+		# because it can change the number of cpus used
+		self._update_camp_events(time)
+
 	def camp_end_event(self, camp, time, last_time):
 		raise NotImplemented
 		#TODO zmienic event na remove active user?
 	@abstractmethod
-	def _add_new_job(self, user, job):
+	def _find_campaign(self, user, job):
 		"""
-		Add the job to an appropriate user campaign.
-		Return: the campaign to which the job was added.
+		Find and return the campaign to which the job will be added.
 		"""
 		raise NotImplemented
 	@abstractmethod
-	def _camp_job_key(self, job):
-		""" Job key function for the inner campaign sort.
+	def _job_camp_key(self, job):
+		"""
+		Job key function for the inner campaign sort.
 		"""
 		raise NotImplemented
-
-	def _priority_job_key(self, job):
+	@abstractmethod
+	def _job_priority_key(self, job):
 		"""
+		Job key function for the scheduler waiting queue sort.
 		"""
+		raise NotImplemented
 		return (job.camp.time_left, job.camp.created, job.camp_index)
