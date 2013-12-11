@@ -9,8 +9,8 @@ class CommonSimulator(BaseSimulator):
 	"""
 	"""
 
-	def __init__(self, jobs, users, cpus):
-		super(CommonSimulator, self).__init__(jobs, users, cpus)
+	def __init__(self, *args):
+		super(CommonSimulator, self).__init__(*args)
 
 	##
 	## Campaign selection algorithms
@@ -45,40 +45,13 @@ class CommonSimulator(BaseSimulator):
 	# pick one
 	_find_campaign = _virtual_based_campaigns
 
-	##
-	## Job run time estimate algorithms
-	##
-
-	def _clairvoyance(self, job, user):
-		"""
-		Perfect estimate.
-		"""
-		return job.run_time
-
-	def _round_up(self, job, user):
-		"""
-		Round up to the nearest selected time unit.
-		"""
-		unit = 60 * 60 # in seconds
-		count = (job.run_time / unit) + 1
-		return count * unit
-
-	def _default_mode(self, job, user):
-		"""
-		Some predefined value, e.g. partition max time limit.
-		"""
-		return 60 * 60 * 24 * 7 # in seconds
-
-	# pick one
-	_get_job_estimate = _clairvoyance
-
 
 class OStrichSimulator(CommonSimulator):
 	"""
 	"""
 
-	def __init__(self, jobs, users, cpus):
-		super(OStrichSimulator, self).__init__(jobs, users, cpus)
+	def __init__(self, *args):
+		super(OStrichSimulator, self).__init__(*args)
 
 	def _job_camp_key(self, job):
 		"""
@@ -99,8 +72,8 @@ class FairshareSimulator(CommonSimulator):
 	"""
 	"""
 
-	def __init__(self, jobs, users, cpus):
-		super(FairshareSimulator, self).__init__(jobs, users, cpus)
+	def __init__(self, *args):
+		super(FairshareSimulator, self).__init__(*args)
 
 	def _job_camp_key(self, job):
 		"""

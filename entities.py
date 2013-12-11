@@ -9,12 +9,12 @@ class Job(object):
 	def __init__(self, stats, user):
 		self._stats = stats
 		self._user = user
+		self.estimate = None
 
 	def reset(self):
 		self._camp = None
 		self._start = None
 		self._completed = False
-		self.estimate = None
 
 	@property
 	def ID(self):

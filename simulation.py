@@ -78,7 +78,7 @@ class BaseSimulator(object):
 
 	__metaclass__ = ABCMeta
 
-	def __init__(self, jobs, users, cpus):
+	def __init__(self, jobs, users, cpus, settings):
 		self.cpu_limit = cpus
 		self.cpu_used = 0
 		self.future_jobs = jobs
@@ -86,6 +86,7 @@ class BaseSimulator(object):
 		self.waiting_jobs = []
 		self.users = users
 		self.total_shares = 0
+		self.settings = settings
 
 	def run(self):
 		"""
@@ -147,7 +148,7 @@ class BaseSimulator(object):
 
 	def _update_camp_estimates(self, time):
 		"""
-		Update estimated end times of campaigns.
+		Update estimated campaign end times in the virtual schedule.
 		Only the first campaign is considered from each user,
 		since the subsequent campaings are guaranteed to end later.
 		"""
@@ -168,8 +169,6 @@ class BaseSimulator(object):
 		if not job.user.active:
 			# user will be now active after this job submission
 			self.total_shares += job.user.ost_shares
-
-		job.estimate = self._get_job_estimate(job, job.user)
 
 		camp = self._find_campaign(job, job.user)
 		camp.add_job(job)
@@ -223,13 +222,6 @@ class BaseSimulator(object):
 			self.total_shares -= camp.user.ost_shares
 			# we need to recalculate the campaign estimates
 			self._update_camp_estimates(time)
-
-	@abstractmethod
-	def _get_job_estimate(self, job, user):
-		"""
-		Return an estimate of the job run time.
-		"""
-		raise NotImplemented
 
 	@abstractmethod
 	def _find_campaign(self, job, user):

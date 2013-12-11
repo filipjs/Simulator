@@ -1,14 +1,24 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from abc import ABCMeta
 from entities import Job, User
 
 
 class BaseReader(object):
+	"""
+	Base class for reading and parsing different workload files.
+	"""
+
 	__metaclass__ = ABCMeta
 
 	def parse_workload(self, filename, serial):
 		"""
 		A wrapper around the main parse method overloaded in subclasses.
+		IN:
+		- filenamae - path to workload file
+		- serial - change parallel jobs to multiple serial ones
+		OUT:
+		- a list of `Jobs` already linked to `User` instances.
 		"""
 		self.jobs = []
 		self.users = {}
@@ -28,14 +38,12 @@ class BaseReader(object):
 	@abstractmethod
 	def _parse(self, filename, serial):
 		"""
-		Parse a workload file and return a list of "Jobs":
-			- filenamae - path to workload file
-			- serial - change parallel jobs to multiple serial ones
+		Parse a specific type of a workload file.
 		"""
 		raise NotImplemented
 
 
-class SwfReader(BaseReader):
+class SWFReader(BaseReader):
 	"""
 	Field numbers in a .swf file.
 	"""
