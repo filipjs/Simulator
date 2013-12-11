@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from abc import ABCMeta
+from abc import ABCMeta, abstractmethod
 from entities import Job, User
 
 

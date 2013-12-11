@@ -3,7 +3,7 @@
 
 import heapq
 import math
-from abc import ABCMeta
+from abc import ABCMeta, abstractmethod
 
 
 class Events(object):
@@ -203,7 +203,8 @@ class BaseSimulator(object):
 
 		self._schedule()
 		self._backfill()
-
+#TODO TO JEST ZLE BO PRZECIEZ NEW I END MOZE ZMIENIC WORKLOAD A TO ZMIENIA KOLEJNOSC
+#TODO AKA ZAWZE TRZEBA UPDATE -> PRZENIESC DO GLOWNEJ PETLI NA KONIEC??
 		if prev_used != self.cpu_used:
 			# we need to recalculate the campaign estimates
 			self._update_camp_estimates(time)

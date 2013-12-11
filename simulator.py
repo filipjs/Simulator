@@ -42,21 +42,24 @@ class Settings(object):
 	"""
 	To create a new setting add a 4-tuple to the templates list.
 	The tuple consists of:
-	(name, description, default value, time unit in seconds [or None])
+		(name, description, default value, time unit [or None])
+	Possible time units: SEC, MINS, HOURS, DAYS.
 	"""
 	templates = [
-		('threshold', "Campaign threshold [MINS]", 10, 60),
+		('threshold', "Campaign threshold", 10, "MINS"),
 		('avg_users', "Average number of concurrent users", 50, None),
-		('decay', "CPU usage half-decay period [HOURS]", 24, 60*60)
+		('decay', "Half-decay period of the CPU usage", 24, "HOURS")
 	]
+
+	time_units = {"MINS": 60, "HOURS": 60*60, "DAYS": 60*60*24}
 
 	def __init__(self, **kwargs):
 		for temp in self.templates:
 			# get a new value or the default
 			value = kwargs.get(temp[0], temp[2])
 			# change the time unit if applicable
-			if temp[3] is not None:
-				value *= temp[3]
+			if temp[3] in self.time_units:
+				value *= self.time_units[temp[3]]
 			# add attribute
 			setattr(self, temp[0], value)
 
@@ -170,5 +173,10 @@ if __name__=="__main__":
 	parser.add_argument('--cpus', type=int,
 			help="Set the number of CPUs in the cluster")
 	parser.add_argument('workload', help="Workload file")
+
+	# automatically build the rest of the arguments
+	for temp in Settings.templates:
+		parser.add_argument('--' + temp[0], type=type(temp[2]),
+			default=temp[2], metavar=temp[3], help=temp[1])
 
 	main(vars(parser.parse_args()))
