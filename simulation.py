@@ -169,7 +169,9 @@ class BaseSimulator(object):
 			# user will be now active after this job submission
 			self.total_shares += job.user.ost_shares
 
-		camp = self._find_campaign(job.user, job)
+		job.estimate = self._get_job_estimate(job, job.user)
+
+		camp = self._find_campaign(job, job.user)
 		camp.add_job(job)
 		camp.sort_jobs(key=self._job_camp_key)
 
@@ -223,7 +225,14 @@ class BaseSimulator(object):
 			self._update_camp_estimates(time)
 
 	@abstractmethod
-	def _find_campaign(self, user, job):
+	def _get_job_estimate(self, job, user):
+		"""
+		Return an estimate of the job run time.
+		"""
+		raise NotImplemented
+
+	@abstractmethod
+	def _find_campaign(self, job, user):
 		"""
 		Find and return the campaign to which the job will be added.
 		"""
