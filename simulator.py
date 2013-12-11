@@ -55,13 +55,13 @@ class Settings(object):
 
 	def __init__(self, **kwargs):
 		for temp in self.templates:
-			# get a new value or the default
-			value = kwargs.get(temp[0], temp[2])
+			name = temp[0]
+			value = kwargs.get(name)
 			# change the time unit if applicable
 			if temp[3] in self.time_units:
 				value *= self.time_units[temp[3]]
 			# add attribute
-			setattr(self, temp[0], value)
+			setattr(self, name, value)
 
 
 def divide_jobs(jobs, first_job, block_time, block_margin):
@@ -118,6 +118,8 @@ def divide_jobs(jobs, first_job, block_time, block_margin):
 
 def main(args):
 
+	print args
+	return 0
 	#TODO select reader based on extenstion
 	reader = SWFReader()
 	jobs = reader.parse_workload(args['workload'], args['serial'])
@@ -147,7 +149,6 @@ def main(args):
 
 		#run_ostrich(job_slice, first_sub, last_sub, cpus)
 		#run_fairshare(job_slice, first_sub, last_sub, cpus)
-		#run_fcfs(job_slice, first_sub, last_sub, cpus)
 
 		first_sub = jobs[b['first']].submit
 		last_sub = jobs[b['last']].submit
@@ -158,25 +159,37 @@ def main(args):
 
 if __name__=="__main__":
 
-	parser = argparse.ArgumentParser(description="Start a simulation from workload file")
-	parser.add_argument('--title', default=time.ctime(),
+	parser = argparse.ArgumentParser(description="Simulate a cluster from a workload file")
+
+	sim_group = parser.add_argument_group('Simulation', 'General simulation parameters')
+	sim_group.add_argument('--title', default=time.ctime(),
 			help="Title of the simulation")
-	parser.add_argument('--job_id', type=int, help="Start from the job with this ID")
-	parser.add_argument('--block_time', metavar="HOURS", type=int,
+	sim_group.add_argument('--job_id', type=int, help="Start from the job with this ID")
+	sim_group.add_argument('--block_time', metavar="HOURS", type=int,
 			help="Divide simulation into 'block_time' long parts")
-	parser.add_argument('--block_margin', metavar="HOURS", type=int, default=0,
+	sim_group.add_argument('--block_margin', metavar="HOURS", type=int, default=0,
 			help="Extra simulation time to fill up the cluster")
-	parser.add_argument('--one_block', action='store_true',
-			help="Simulate only one part")
-	parser.add_argument('--serial', action='store_true',
+	sim_group.add_argument('--one_block', action='store_true',
+			help="Simulate only the first block")
+	sim_group.add_argument('--serial', action='store_true',
 			help="Change parallel jobs to serial")
-	parser.add_argument('--cpus', type=int,
-			help="Set the number of CPUs in the cluster")
-	parser.add_argument('workload', help="Workload file")
+	sim_group.add_argument('--cpu_count', type=int,
+			help="Set a static number of CPUs")
+	sim_group.add_argument('--cpu_percentile', metavar='P-th', type=int,
+			help="Set the number of CPUs to the P-th percentile")
+	sim_group.add_argument('workload', help="Workload file")
 
 	# automatically build the rest of the arguments
+	alg_group = parser.add_argument_group('Algorithm', 'Algorithm specific parameters')
 	for temp in Settings.templates:
-		parser.add_argument('--' + temp[0], type=type(temp[2]),
+		alg_group.add_argument('--' + temp[0], type=type(temp[2]),
 			default=temp[2], metavar=temp[3], help=temp[1])
 
-	main(vars(parser.parse_args()))
+	args = vars(parser.parse_args())
+	# manual check of the --cpu_xx arguments [required and exclusive]
+	if not args['cpu_count'] and not args['cpu_percentile']:
+		parser.error("one of the arguments --cpu_count --cpu_percentile is required")
+	if args['cpu_count'] and args['cpu_percentile']:
+		parser.error("argument --cpu_count not allowed with argument --cpu_percentile")
+	# run the simulation
+	main(args)
