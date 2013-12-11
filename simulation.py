@@ -4,7 +4,6 @@
 import heapq
 import math
 from abc import ABCMeta
-from entities import Job, Campaign, User
 
 
 class Events(object):
@@ -113,6 +112,10 @@ class BaseSimulator(object):
 			if self.prev_event is not None:
 				self._process_period(time - self.prev_event)
 
+			# TODO lista -> <time, utility>
+			# TODO printy eventow aka job end,
+			# TODO i jednak camp start??? bo utility wtedy
+
 			if event == Events.new_job:
 				self._new_job_event(entity, time)
 			elif event == Events.job_end:
@@ -218,22 +221,24 @@ class BaseSimulator(object):
 			self.total_shares -= camp.user.ost_shares
 			# we need to recalculate the campaign estimates
 			self._update_camp_estimates(time)
+
 	@abstractmethod
 	def _find_campaign(self, user, job):
 		"""
 		Find and return the campaign to which the job will be added.
 		"""
 		raise NotImplemented
+
 	@abstractmethod
 	def _job_camp_key(self, job):
 		"""
 		Job key function for the inner campaign sort.
 		"""
 		raise NotImplemented
+
 	@abstractmethod
 	def _job_priority_key(self, job):
 		"""
 		Job key function for the scheduler waiting queue sort.
 		"""
 		raise NotImplemented
-		return (job.camp.time_left, job.camp.created, job.camp_index)

@@ -15,6 +15,7 @@ class Job(object):
 		self._camp = None
 		self._start = None
 		self._completed = False
+
 	@property
 	def ID(self):
 		return self._stats['id']
@@ -83,6 +84,7 @@ class Campaign(object):
 		self.offset = 0
 		self.active_jobs = []
 		self.completed_jobs = []
+
 	@property
 	def ID(self):
 		return self._id
@@ -143,6 +145,7 @@ class User(object):
 		self._cpu_clock = 0
 		self._occupied_cpus = 0
 		self.completed_jobs = []
+
 	@property
 	def ID(self):
 		return self._id
