@@ -103,6 +103,10 @@ class BaseSimulator(object):
 		self.prev_event = None    # time of the previous event
 		self.pq = PriorityQueue() # events priority queue
 
+		# add the first decay event
+		# first job submit is the simulation 'time zero'
+		self._add_next_decay(self.future_jobs[0].submit)
+
 		count = 0
 		submits = len(self.future_jobs)
 
@@ -118,6 +122,7 @@ class BaseSimulator(object):
 			# the queue cannot be empty here
 			time, event, entity = self.pq.pop()
 
+			# process the time skipped between events
 			if self.prev_event is not None:
 				self._process_period(time - self.prev_event)
 
@@ -125,6 +130,7 @@ class BaseSimulator(object):
 			# TODO printy eventow aka job end,
 			# TODO i jednak camp start??? bo utility wtedy
 
+			# do work based on event type
 			if event == Events.new_job:
 				self.new_job_event(entity, time)
 			elif event == Events.job_end:
@@ -135,10 +141,31 @@ class BaseSimulator(object):
 				self.decay_period_event(time)
 			else:
 				raise Exception('unknown event')
-			# update event time
+
+			# add/update events
+			if event == Events.decay_period:
+				# don't add the next event if the queue is empty,
+				# this indicates that the simulation has ended
+				if not self.pq.empty():
+					self._add_next_decay(time)
+			else:
+				# for other events just update campaign_ends
+				self._update_camp_estimates(time)
+
+			# update event timer
 			self.prev_event = time
 		# return simulation results
 		return self.results
+
+	def _add_next_decay(self, time):
+		"""
+		Add the next decay event from now.
+		"""
+		self.pq.add(
+			time + self.settings.decay,
+			Events.decay_period,
+			None # there is no entity attached
+		)
 
 	def _share_value(self, user):
 		"""
@@ -150,7 +177,7 @@ class BaseSimulator(object):
 	def _process_period(self, period):
 		"""
 		Distribute virtual time to active users.
-		Also account the real work done by all jobs.
+		Also account the real work done by the jobs.
 		"""
 		for u in self.users:
 			if u.active:
@@ -176,12 +203,12 @@ class BaseSimulator(object):
 
 	def _schedule(self):
 		"""
-		Try to execute the first job from the
-		priority-ordered waiting_jobs list.
+		Try to execute the highest priority job from
+		the waiting_jobs list.
 		"""
-		pass
-		#TODO tutaj samemu sobie sortowac waiting_jobs
-		#TODO waiting_jobs.sort(key=self._job_priority_key)
+
+		#first sort the jobs using ordering defined by each algorithm
+		self.waiting_jobs.sort(key=self._job_priority_key)
 		#TODO i jak free cpu po 1 pracy to wtedy wlaczac backfilling?
 		#TODO if still left free and not empty waiting -> self._backfill()
 
@@ -198,20 +225,10 @@ class BaseSimulator(object):
 		camp.add_job(job)
 		camp.sort_jobs(key=self._job_camp_key)
 
-		#TODO
-		#if fresh: print <camp start event> aka utility
-
+		#TODO if fresh: print <camp start event> aka utility
 		self.waiting_jobs.append(job)
-		self.waiting_jobs.sort(key=self._job_priority_key)
-#TODO wszedzie trzeba robic sortowanie waiting jobs??
 #TODO EL OH EL -> przeciez jak teraz sa rozne wartosci _share_value
-#TODO to mniejszy time_left nie oznacza ze kampania ma wyzszy priorytet
-#TODO trzeba jeszcze to podzielic przez user.ost_shares ??
-#TODO TO SAMO SIE TYCZY KODU W SLURMIE ! ! ! ! ! !
-
 		self._schedule()
-		# the number of cpus used could change
-		self._update_camp_estimates(time)
 
 	def job_end_event(self, job, time):
 		"""
@@ -229,8 +246,6 @@ class BaseSimulator(object):
 		self.cpu_used -= job.proc
 
 		self._schedule()
-		# the number of cpus used could change
-		self._update_camp_estimates(time)
 
 	def camp_end_event(self, camp, time):
 		"""
@@ -245,9 +260,6 @@ class BaseSimulator(object):
 		if not camp.user.active:
 			# user became inactive
 			self.total_shares -= camp.user.ost_shares
-		# the total number of shares could change and we anyway
-		# have to add the user next campaign_end event
-		self._update_camp_estimates(time)
 
 	def decay_period_event(self, time):
 		"""
