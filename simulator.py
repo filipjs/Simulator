@@ -7,7 +7,7 @@ from reader import SWFReader, ICMReader
 
 
 ##
-## User run time estimate functions
+## User run time estimate functions.
 ##
 
 def clairvoyance(job):
@@ -35,7 +35,7 @@ get_job_estimate = clairvoyance
 
 
 ##
-## Required algorithm specific settings to read the from command line.
+## Algorithms specific settings to read the from command line.
 ##
 
 class Settings(object):
@@ -48,7 +48,7 @@ class Settings(object):
 	templates = [
 		('threshold', "Campaign threshold", 10, "MINS"),
 		('avg_users', "Average number of concurrent users", 50, None),
-		('decay', "Half-decay period of the CPU usage", 24, "HOURS")
+		('decay', "The decay period of the CPU usage", 24, "HOURS")
 	]
 
 	time_units = {"MINS": 60, "HOURS": 60*60, "DAYS": 60*60*24}
@@ -60,21 +60,21 @@ class Settings(object):
 			# change the time unit if applicable
 			if temp[3] in self.time_units:
 				value *= self.time_units[temp[3]]
-			# add attribute
+			# set the attribute
 			setattr(self, name, value)
 
 
 def divide_jobs(jobs, first_job, block_time, block_margin):
 	"""
 	Divide the jobs into potentially many smaller blocks.
-	Each block has some extra jobs to imitate the cluster filling up.
+	Each block can have extra jobs to fill up the cluster.
 	IN:
 	- jobs - list of all the jobs
 	- first_job - ID of the first job to start with
 	- block_time - length of each block in seconds or None
 	- block_margin - extra length added to the block on both sides
 	OUT:
-	- a list of consecutive blocks : a block is a dict of indexes
+	- a list of consecutive blocks - a block is a dict of indexes
 	{left [margin start]:first [block job]:last [block job]:right [margin end]}
 	"""
 	for i, j in enumerate(jobs):
@@ -131,13 +131,14 @@ def main(args):
 
 	if not args['job_id']:
 		args['job_id'] = jobs[0].ID
-#TODO GDZIES TUTAJ PRINT ARGS JAKO 'CONTEXT' + TITLE ARG + KLASA SETTIGS??
+
 	# change hours to seconds
 	block_time = args['block_time'] and args['block_time'] * 3600
 	block_margin = args['block_margin'] * 3600
-
+#TODO set user ost&fair shares -> fair przy kazdym bloku
 	blocks = divide_jobs(jobs, args['job_id'], block_time, block_margin)
 #TODO all users -> do symulacji tylko tych ktorzy tam wystepuja + reset
+
 	for b in blocks:
 		full_slice = jobs[b['left']:b['right']+1] # block includes both ends
 

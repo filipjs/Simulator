@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 
+
 class Job(object):
 	"""
-	A single job with the all relevant properties.
+	A single job with the relevant properties.
 	Correct usage scheme:
 		reset -> camp.setter -> start_execution -> execution_ended
 	"""
@@ -72,7 +73,7 @@ class Job(object):
 class Campaign(object):
 	"""
 	A user campaign with the appropriate jobs.
-	A campaign is 'active' if it is still running in the virtual schedule.
+	A campaign is active if it is still running in the virtual schedule.
 	"""
 	def __init__(self, id, user, time_stamp):
 		self._id = id
@@ -99,20 +100,25 @@ class Campaign(object):
 		return self._remaining + self._completed
 	@property
 	def time_left(self):
+		#TODO zrobic - int(self.virtual) ??
+		#TODO potwierdzic czy to czegos nie psuje
 		return self.workload - self.virtual
 	@property
 	def active(self):
 		return self.time_left > 0
 
 	def add_job(self, job):
+		# until the job ends we can only use the estimate
 		self._remaining += job.estimate * job.proc
 		self.active_jobs.append(job)
 		job.camp = self # backward link
 
 	def job_started(self, job):
+		# nothing happens at this time
 		pass
 
 	def job_ended(self, job):
+		# update the run time to the real value
 		self._remaining -= job.estimate * job.proc
 		self._completed += job.run_time * job.proc
 		self.active_jobs.remove(job)
@@ -133,8 +139,7 @@ class User(object):
 	"""
 	def __init__(self, uid):
 		self._id = uid
-		self.active_camps = []
-		self.completed_camps = []
+		self.camp_count = 0
 		self.ost_shares = None
 		self.fair_shares = None
 
@@ -142,8 +147,10 @@ class User(object):
 		assert not self.active_camps
 		assert not self._occupied_cpus
 		self._lost_virtual = 0
-		self._cpu_clock = 0
+		self._cpu_clock_used = 0
 		self._occupied_cpus = 0
+		self.active_camps = []
+		self.completed_camps = []
 		self.completed_jobs = []
 
 	@property
@@ -162,15 +169,19 @@ class User(object):
 			total -= virt
 			camp.offset = offset
 			offset += camp.time_left
+			#TODO total jest float, reszta ma byc int?
+			#TODO czy cos sie tutaj moze popsuc??
 		# overflow from 'total' is lost
 		self._lost_virtual += total
 
 	def real_work(self, value):
-		self._cpu_clock += self._occupied_cpus * value
+		self._cpu_clock_used += self._occupied_cpus * value
 
 	def job_started(self, job):
+		# we only need to know the number of processors
 		self._occupied_cpus += job.proc
 
 	def job_ended(self, job):
+		# update processor count
 		self._occupied_cpus -= job.proc
 		self.completed_jobs.append(job)

@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
 from simulation import BaseSimulator # TODO zmiana lib pozniej
 from entities import Campaign
 
@@ -19,28 +18,26 @@ class CommonSimulator(BaseSimulator):
 	def _virtual_based_campaigns(self, job, user):
 		"""
 		Check the job submit time against the last campaign creation time
-		extended by `camp_threshold` value.
+		extended by threshold value.
 		Create a new campaign if the submit time is out of range.
 		"""
-		CAMP_THRESHOLD = 10 * 60 # in seconds
-
 		if user.active_camps:
 			last = user.active_camps[-1]
-			if job.submit < last.created + self.CAMP_THRESHOLD:
-				return last
+			if job.submit < last.created + self.settings.threshold:
+				return last, False
 		elif user.completed_camps:
-			# a campaign could end without passing the threshold value
+			# a campaign could have ended without passing the threshold
 			last = user.completed_camps[-1]
-			if job.submit < last.created + self.CAMP_THRESHOLD:
+			if job.submit < last.created + self.settings.threshold:
 				# move the campaign back to active
 				user.completed_camps.pop()
 				user.active_camps.append(last)
-				return last
+				return last, False
 		# need a new campaign
-		next_id = len(user.active_camps) + len(user.completed_camps) + 1
-		new_camp = Campaign(next_id, user, job.submit)
+		new_camp = Campaign(user.camp_count, user, job.submit)
+		user.camp_count += 1
 		user.active_camps.append(new_camp)
-		return new_camp
+		return new_camp, True
 
 	# pick one
 	_find_campaign = _virtual_based_campaigns
@@ -56,15 +53,19 @@ class OStrichSimulator(CommonSimulator):
 	def _job_camp_key(self, job):
 		"""
 		Order by shortest run time estimate.
+		Ties are ordered by earlier submit.
 		"""
 		return (job.estimate, job.submit)
 
 	def _job_priority_key(self, job):
 		"""
 		Priority ordering for the scheduler:
-		1) shortest campaigns first
-		2) inside campaigns use their default ordering
+		1) shortest ending campaigns
+		2) earliest campaigns
+		3) inside campaigns use the job existing ordering
 		"""
+		#TODO EL OH EL x 2, a moze by tak offset to time left dodac -.-
+		#TODO no i trzeba podzielic przez ost_shares right? riiiiight??
 		return (job.camp.time_left, job.camp.created, job.camp_index)
 
 
