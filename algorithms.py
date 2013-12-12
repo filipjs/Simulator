@@ -64,10 +64,13 @@ class OStrichSimulator(CommonSimulator):
 		2) earliest campaigns
 		3) inside campaigns use the job existing ordering
 		"""
-
-		#TODO EL OH EL x 2, a moze by tak offset to time left dodac -.-
-		#TODO no i trzeba podzielic przez ost_shares right? riiiiight??
-		return (job.camp.time_left, job.camp.created, job.camp_index)
+		end = job.camp.time_left + job.camp.offset
+		end = end / float(job.user.ost_shares)
+		# the end should be further multiplied by (total_shares / cpu_used)
+		# but that is a constant value and we are only interested in the ordering
+		# and not the absolute value, so we can skip that
+		# Note: cpu_used is not even updated at this point
+		return (end, job.camp.created, job.camp_index)
 
 
 class FairshareSimulator(CommonSimulator):

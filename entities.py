@@ -14,6 +14,7 @@ class Job(object):
 
 	def reset(self):
 		self._camp = None
+		self._camp_index = None
 		self._start = None
 		self._completed = False
 
