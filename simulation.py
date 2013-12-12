@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import heapq
+import itertools
 import math
 from abc import ABCMeta, abstractmethod
 
@@ -20,14 +21,13 @@ class PriorityQueue(object):
 	"""
 	A priority queue of <time, event, entity>, ordered by time.
 	Ties are ordered by event type.
-#TODO FAIL AGAIN, przeciez moze byc time + event taki sam, np campaign_end
-#TODO i co wtedy ma dac porownanie na entity? bez sensu
 	"""
 	REMOVED = 'removed-event'
 
 	def __init__(self):
 		self._pq = []
 		self._entries = {}
+		self._counter = itertools.count()
 
 	def add(self, time, event, entity):
 		"""
@@ -36,7 +36,9 @@ class PriorityQueue(object):
 		key = (event, entity) # must be a unique key
 		if key in self._entries:
 			self._remove_event(key)
-		entry = [time, event, entity]
+		# counter prevents the comparison of entities,
+		# in case time and event are the same
+		entry = [time, event, next(self._counter), entity]
 		self._entries[key] = entry
 		heapq.heappush(self._pq, entry)
 
@@ -46,7 +48,7 @@ class PriorityQueue(object):
 		Raise KeyError if queue is empty.
 		"""
 		if not self.empty():
-			time, event, entity = heapq.heappop(self._pq)
+			time, event, _, entity = heapq.heappop(self._pq)
 			key = (event, entity)
 			del self._entries[key]
 			return time, event, entity
