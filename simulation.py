@@ -194,7 +194,7 @@ class BaseSimulator(object):
 			if u.active:
 				first_camp = u.active_camps[0]
 				est = first_camp.time_left / self._share_value(u)
-				est = time + int(math.ceil(est))
+				est = time + int(math.ceil(est)) # must be int
 				self.pq.add(
 					est,
 					Events.campaign_end,
@@ -203,14 +203,33 @@ class BaseSimulator(object):
 
 	def _schedule(self):
 		"""
-		Try to execute the highest priority job from
+		Try to execute the highest priority jobs from
 		the waiting_jobs list.
 		"""
 
-		#first sort the jobs using the defined ordering
+		#sort the jobs using the defined ordering
 		self.waiting_jobs.sort(key=self._job_priority_key)
-		#TODO i jak free cpu po 1 pracy to wtedy wlaczac backfilling?
-		#TODO if still left free and not empty waiting -> self._backfill()
+
+		while self.waiting_jobs:
+			free = self.cpu_limit - self.cpu_used
+			if self.waiting_jobs[0].proc <= free:
+				# execute the job
+				job = self.waiting_jobs.pop(0)
+				job.start_execution(#TODO TIME)
+				self.cpu_used += job.proc
+				self.running_jobs.append(job)
+
+				self.pq.add(
+					#TODO time + job.run_time
+					Events.job_end,
+					job
+				)
+			else:
+				# only top priority can be scheduled
+				break
+
+		#TODO backfilling
+		# if still left free and not empty waiting -> self._backfill()
 
 	def new_job_event(self, job, time):
 		"""

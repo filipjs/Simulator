@@ -102,7 +102,7 @@ class Campaign(object):
 	@property
 	def time_left(self):
 		# self.virtual is a float
-		# and want an integer value returned
+		# and we want an integer value
 		return self.workload - int(self.virtual)
 	@property
 	def active(self):
