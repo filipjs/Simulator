@@ -74,7 +74,7 @@ class Job(object):
 class Campaign(object):
 	"""
 	A user campaign with the appropriate jobs.
-	A campaign is active if it is still running in the virtual schedule.
+	A campaign is active if it is running in the virtual schedule.
 	"""
 	def __init__(self, id, user, time_stamp):
 		self._id = id
@@ -101,9 +101,9 @@ class Campaign(object):
 		return self._remaining + self._completed
 	@property
 	def time_left(self):
-		#TODO zrobic - int(self.virtual) ??
-		#TODO potwierdzic czy to czegos nie psuje
-		return self.workload - self.virtual
+		# self.virtual is a float
+		# and want an integer value returned
+		return self.workload - int(self.virtual)
 	@property
 	def active(self):
 		return self.time_left > 0
@@ -128,7 +128,8 @@ class Campaign(object):
 	def sort_jobs(self, job_cmp):
 		self.active_jobs.sort(key=job_key)
 		for i, job in enumerate(self.active_jobs):
-			job.camp_index = i # position in the list
+			# update the position in the campaign list
+			job.camp_index = i
 
 
 class User(object):
@@ -170,9 +171,7 @@ class User(object):
 			total -= virt
 			camp.offset = offset
 			offset += camp.time_left
-			#TODO total jest float, reszta ma byc int?
-			#TODO czy cos sie tutaj moze popsuc??
-		# overflow from 'total' is lost
+		# overflow from total is lost
 		self._lost_virtual += total
 
 	def real_work(self, value):

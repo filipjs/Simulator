@@ -37,7 +37,7 @@ class PriorityQueue(object):
 		if key in self._entries:
 			self._remove_event(key)
 		# counter prevents the comparison of entities,
-		# in case time and event are the same
+		# in case the time and the event are the same
 		entry = [time, event, next(self._counter), entity]
 		self._entries[key] = entry
 		heapq.heappush(self._pq, entry)
@@ -104,14 +104,14 @@ class BaseSimulator(object):
 		self.pq = PriorityQueue() # events priority queue
 
 		# add the first decay event
-		# first job submit is the simulation 'time zero'
+		# the first job submit is the simulation 'time zero'
 		self._add_next_decay(self.future_jobs[0].submit)
 
 		count = 0
 		submits = len(self.future_jobs)
 
 		while count < submits or not self.pq.empty():
-			# no need to add more than one event of the same type
+			# no need to add more than one event of this type
 			if count < submits:
 				self.pq.add(
 					self.future_jobs[count].submit,
@@ -130,7 +130,7 @@ class BaseSimulator(object):
 			# TODO printy eventow aka job end,
 			# TODO i jednak camp start??? bo utility wtedy
 
-			# do work based on event type
+			# do work based on the event type
 			if event == Events.new_job:
 				self.new_job_event(entity, time)
 			elif event == Events.job_end:
@@ -207,7 +207,7 @@ class BaseSimulator(object):
 		the waiting_jobs list.
 		"""
 
-		#first sort the jobs using ordering defined by each algorithm
+		#first sort the jobs using the defined ordering
 		self.waiting_jobs.sort(key=self._job_priority_key)
 		#TODO i jak free cpu po 1 pracy to wtedy wlaczac backfilling?
 		#TODO if still left free and not empty waiting -> self._backfill()
@@ -215,7 +215,7 @@ class BaseSimulator(object):
 	def new_job_event(self, job, time):
 		"""
 		Add the job to a campaign and do a scheduling pass.
-		Update campaign_end events.
+		Update the user activity status.
 		"""
 		if not job.user.active:
 			# user will be active after this job submission
@@ -227,29 +227,26 @@ class BaseSimulator(object):
 
 		#TODO if fresh: print <camp start event> aka utility
 		self.waiting_jobs.append(job)
-#TODO EL OH EL -> przeciez jak teraz sa rozne wartosci _share_value
 		self._schedule()
 
 	def job_end_event(self, job, time):
 		"""
 		Free the resources and do a scheduling pass.
-		Update campaign_end events.
 		"""
 		job.execution_ended(time)
-		# the job estimated run time could be different from the
+		# the job estimated run time could be higher than the
 		# real run time, so we need to redistribute any extra
-		# virtual time from the mentioned difference
+		# virtual time created by the mentioned difference
 		job.user.virtual_work(0)
 
 		# remove the job from the processors
 		self.running_jobs.remove(job)
 		self.cpu_used -= job.proc
-
 		self._schedule()
 
 	def camp_end_event(self, camp, time):
 		"""
-		Remove the campaign and update campaign_end events.
+		Remove the campaign. Update the user activity status.
 		"""
 		assert camp.user.active_camps[0] == camp
 		assert camp.time_left == 0
@@ -268,8 +265,6 @@ class BaseSimulator(object):
 		"""
 		pass
 		#TODO -> po prostu old * 1/2??
-		#TODO infinite loop -> ten event bedzie dodawac nastepny taki sam
-		#TODO po prostu -> if pg.empty -> nie dodawaj??
 
 	@abstractmethod
 	def _find_campaign(self, job, user):
