@@ -8,19 +8,19 @@ from abc import ABCMeta, abstractmethod
 
 class Events(object):
 	"""
-	The ordering of the events is important,
+	The ordering of the events is important, since
 	it is used in a priority queue to break ties.
 	"""
-	decay_period = 0
 	new_job = 1
 	job_end = 2
 	campaign_end = 3
+	force_decay = 4
 
 
 class PriorityQueue(object):
 	"""
 	A priority queue of <time, event, entity>, ordered by time.
-	Ties are ordered by event type.
+	Ties are ordered by the event type.
 	"""
 	REMOVED = 'removed-event'
 
@@ -78,8 +78,9 @@ class PriorityQueue(object):
 
 class BaseSimulator(object):
 	"""
-	Base class with the simulation structure.
-	Algorithm specific parts must be created in subclasses..
+	Defines the flow of the simulation.
+	Simultaneously maintains statistics about
+	virtual campaigns and effective cpu usage.
 	"""
 
 	__metaclass__ = ABCMeta
@@ -91,21 +92,27 @@ class BaseSimulator(object):
 		self.running_jobs = []
 		self.waiting_jobs = []
 		self.users = users
-		self.total_shares = 0
+		self.active_shares = 0
 		self.settings = settings
 
 	def run(self):
 		"""
 		Proceed with the simulation.
+		Returns a list of encountered events.
 		"""
 		self.results = []
 
-		self.prev_event = None    # time of the previous event
-		self.pq = PriorityQueue() # events priority queue
-
-		# add the first decay event
+		self.pq = PriorityQueue()	# events priority queue
 		# the first job submit is the simulation 'time zero'
-		self._add_next_decay(self.future_jobs[0].submit)
+		self.prev_event = self.now = self.future_jobs[0].submit
+		self.now = None			# time of the current event
+
+		# Note: cpu usage decay is always applied after each event.
+		# There is also a dummy force_decay event inserted into
+		# the queue to force the calculations in case the gap
+		# between sequential would be too long.
+		self.decay_factor = 1 - (0.693 / self.settings.decay)
+		self.force_period = 60
 
 		count = 0
 		submits = len(self.future_jobs)
@@ -120,11 +127,13 @@ class BaseSimulator(object):
 				)
 				count += 1
 			# the queue cannot be empty here
-			time, event, entity = self.pq.pop()
+			self.now, event, entity = self.pq.pop()
 
 			# process the time skipped between events
-			if self.prev_event is not None:
-				self._process_period(time - self.prev_event)
+			diff = self.now - self.prev_event
+			if diff:
+				self._process_virtual(diff)
+				self._process_real(diff)
 
 			# TODO lista -> <time, utility>
 			# TODO printy eventow aka job end,
@@ -132,74 +141,78 @@ class BaseSimulator(object):
 
 			# do work based on the event type
 			if event == Events.new_job:
-				self.new_job_event(entity, time)
+				self.new_job_event(entity)
 			elif event == Events.job_end:
-				self.job_end_event(entity, time)
+				self.job_end_event(entity)
 			elif event == Events.campaign_end:
-				self.camp_end_event(entity, time)
-			elif event == Events.decay_period:
-				self.decay_period_event(time)
+				self.camp_end_event(entity)
+			elif event == Events.force_decay:
+				pass
 			else:
 				raise Exception('unknown event')
 
-			# add/update events
-			if event == Events.decay_period:
-				# don't add the next event if the queue is empty,
-				# this indicates that the simulation has ended
-				if not self.pq.empty():
-					self._add_next_decay(time)
-			else:
-				# for other events just update campaign_ends
-				self._update_camp_estimates(time)
+			if event != Events.force_decay:
+				# don't update on force_decay since nothing has changed
+				self._update_camp_estimates()
+			if not self.pq.empty():
+				# the simulation has ended if the queue is empty
+				self._force_next_decay()
 
 			# update event timer
-			self.prev_event = time
+			self.prev_event = self.now
 		# return simulation results
 		return self.results
 
-	def _add_next_decay(self, time):
-		"""
-		Add the next decay event from now.
-		"""
-		self.pq.add(
-			time + self.settings.decay,
-			Events.decay_period,
-			None # there is no entity attached
-		)
-
 	def _share_value(self, user):
 		"""
-		Calculate the user share of the virtual resources.
+		Calculate the user share of the available resources.
 		"""
-		share = float(u.shares) / self.total_shares
+		share = float(u.shares) / self.active_shares
 		return share * self.cpu_used
 
-	def _process_period(self, period):
+	def _process_virtual(self, period):
 		"""
 		Distribute virtual time to active users.
-		Also account the real work done by the jobs.
 		"""
 		for u in self.users:
 			if u.active:
 				u.virtual_work(period * self._share_value(u))
-			u.real_work(period)
 
-	def _update_camp_estimates(self, time):
+	def _process_real(self, period):
+		"""
+		Account the real work done by the jobs.
+		Apply the rolling decay to each user usage.
+		"""
+		real_decay = self.decay_factor ** period
+		for u in self.users:
+			u.real_work(period, real_decay)
+
+	def _update_camp_estimates(self):
 		"""
 		Update estimated campaign end times in the virtual schedule.
 		Only the first campaign is considered from each user,
-		since the subsequent campaings are guaranteed to end later.
+		since the subsequent campaigns are guaranteed to end later.
 		"""
 		for u in self.users:
 			if u.active:
 				first_camp = u.active_camps[0]
 				est = first_camp.time_left / self._share_value(u)
-				est = time + int(math.ceil(est)) # must be int
+				est = self.now + int(math.ceil(est)) # must be int
 				self.pq.add(
 					est,
 					Events.campaign_end,
 					first_camp
 				)
+
+	def _force_next_decay(self):
+		"""
+		Add the next decay event.
+		"""
+		self.pq.add(
+			self.now + self.force_period,
+			Events.force_decay,
+			"Dummy event"
+		)
 
 	def _schedule(self):
 		"""
@@ -215,7 +228,7 @@ class BaseSimulator(object):
 			if self.waiting_jobs[0].proc <= free:
 				# execute the job
 				job = self.waiting_jobs.pop(0)
-				job.start_execution(#TODO TIME)
+				job.start_execution()#TODO TIME)
 				self.cpu_used += job.proc
 				self.running_jobs.append(job)
 
@@ -227,33 +240,36 @@ class BaseSimulator(object):
 			else:
 				# only top priority can be scheduled
 				break
+		pass
 
 		#TODO backfilling
 		# if still left free and not empty waiting -> self._backfill()
 
-	def new_job_event(self, job, time):
+	def new_job_event(self, job):
 		"""
 		Add the job to a campaign and do a scheduling pass.
 		Update the user activity status.
 		"""
 		if not job.user.active:
 			# user will be active after this job submission
-			self.total_shares += job.user.ost_shares
+			self.active_shares += job.user.shares
 
 		camp, fresh = self._find_campaign(job, job.user)
 		camp.add_job(job)
 		camp.sort_jobs(key=self._job_camp_key)
 
 		#TODO if fresh: print <camp start event> aka utility
+		#TODO ew. to dopiero po wywolaniu schedule??
+
 		self.waiting_jobs.append(job)
 		self._schedule()
 
-	def job_end_event(self, job, time):
+	def job_end_event(self, job):
 		"""
 		Free the resources and do a scheduling pass.
 		"""
-		job.execution_ended(time)
-		# the job estimated run time could be higher than the
+		job.execution_ended(self.now)
+		# the job predicted run time could be higher than the
 		# real run time, so we need to redistribute any extra
 		# virtual time created by the mentioned difference
 		job.user.virtual_work(0)
@@ -263,7 +279,7 @@ class BaseSimulator(object):
 		self.cpu_used -= job.proc
 		self._schedule()
 
-	def camp_end_event(self, camp, time):
+	def camp_end_event(self, camp):
 		"""
 		Remove the campaign. Update the user activity status.
 		"""
@@ -275,15 +291,7 @@ class BaseSimulator(object):
 
 		if not camp.user.active:
 			# user became inactive
-			self.total_shares -= camp.user.ost_shares
-
-	def decay_period_event(self, time):
-		"""
-		Reduce the importance of the previous cpu usage.
-		Add the next decay_period event.
-		"""
-		pass
-		#TODO -> po prostu old * 1/2??
+			self.active_shares -= camp.user.shares
 
 	@abstractmethod
 	def _find_campaign(self, job, user):

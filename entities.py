@@ -142,8 +142,7 @@ class User(object):
 	def __init__(self, uid):
 		self._id = uid
 		self.camp_count = 0
-		self.ost_shares = None
-		self.fair_shares = None
+		self.shares = None
 
 	def reset(self):
 		assert not self.active_camps
@@ -162,6 +161,10 @@ class User(object):
 	def active(self):
 		return bool(self.active_camps)
 
+	@property
+	def cpu_clock_used(self):
+		return round(self._cpu_clock_used, 3)
+
 	def virtual_work(self, value):
 		total = reduce(lambda x, y: x + y.virtual, self.active_camps, value)
 		offset = 0
@@ -174,8 +177,9 @@ class User(object):
 		# overflow from total is lost
 		self._lost_virtual += total
 
-	def real_work(self, value):
+	def real_work(self, value, real_decay):
 		self._cpu_clock_used += self._occupied_cpus * value
+		self._cpu_clock_used *= real_decay
 
 	def job_started(self, job):
 		# we only need to know the number of processors

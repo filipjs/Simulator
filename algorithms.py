@@ -65,8 +65,8 @@ class OStrichSimulator(CommonSimulator):
 		3) inside campaigns use the job existing ordering
 		"""
 		end = job.camp.time_left + job.camp.offset
-		end = float(end) / job.user.ost_shares
-		# the end should be further multiplied by (total_shares / cpu_used)
+		end = float(end) / job.user.shares
+		# the end should be further multiplied by (active_shares / cpu_used)
 		# but that is a constant value and we are only interested in the ordering
 		# and not the absolute value, so we can skip that
 		return (end, job.camp.created, job.camp_index)
@@ -89,5 +89,11 @@ class FairshareSimulator(CommonSimulator):
 		"""
 		Order by the most under-serviced user account.
 		"""
-		#TODO some value of job.user._cpu_clock / job.user.fair_shares
-		return None
+		fairshare = job.user.cpu_clock_used / job.user.shares
+		# the full formula for fairshare priority is:
+		# 	pow(2.0, -(usage_efctv / shares_norm))
+		# effective usage = my usage / global usage
+		# shares_norm = my share / total shares
+		# we are however only interested in the ordering so we can
+		# skip the constant values greatly simplifying the formula
+		return (fairshare, job.submit)
