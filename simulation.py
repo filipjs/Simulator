@@ -8,7 +8,7 @@ from abc import ABCMeta, abstractmethod
 
 class Events(object):
 	"""
-	The ordering of the events is important, since
+	The ordering of the events is important since
 	it is used in a priority queue to break ties.
 	"""
 	new_job = 1
@@ -102,15 +102,14 @@ class BaseSimulator(object):
 		"""
 		self.results = []
 
-		self.pq = PriorityQueue()	# events priority queue
+		self.pq = PriorityQueue() # events priority queue
 		# the first job submit is the simulation 'time zero'
 		self.prev_event = self.now = self.future_jobs[0].submit
-		self.now = None			# time of the current event
 
 		# Note: cpu usage decay is always applied after each event.
 		# There is also a dummy force_decay event inserted into
 		# the queue to force the calculations in case the gap
-		# between sequential would be too long.
+		# between consecutive events would be too long.
 		self.decay_factor = 1 - (0.693 / self.settings.decay)
 		self.force_period = 60
 
