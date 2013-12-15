@@ -85,7 +85,8 @@ class BaseSimulator(object):
 
 	__metaclass__ = ABCMeta
 
-	def __init__(self, jobs, users, cpus, settings):
+	def __init__(self, jobs, users, cpus, settings, estimator, selector):
+		#TODO POZAMIENIAC TO NA PRIVATE ZMIENNE CO NIE?
 		self.cpu_limit = cpus
 		self.cpu_used = 0
 		self.future_jobs = jobs
@@ -94,6 +95,8 @@ class BaseSimulator(object):
 		self.users = users
 		self.active_shares = 0
 		self.settings = settings
+		self.estimator = estimator
+		self.selector = selector
 
 	def run(self):
 		"""
@@ -156,7 +159,7 @@ class BaseSimulator(object):
 			if not self.pq.empty():
 				# the simulation has ended if the queue is empty
 				self._force_next_decay()
-
+#TODO ESTIMATE_END_EVENT
 			# update event timer
 			self.prev_event = self.now
 		# return simulation results
@@ -253,7 +256,10 @@ class BaseSimulator(object):
 			# user will be active after this job submission
 			self.active_shares += job.user.shares
 
-		camp = self._find_campaign(job, job.user) #TODO selector.find..
+		#TODO NAJPIERW ESTIMATE CZY NAJPIERW FIND CAMP??
+		#TODO ESTIMATE MUSI BYC NA PEWNO PRZED .ADD_JOB
+		job.estimate = self.estimator.initial_estimate(job)
+		camp = self.selector.find_campaign(job, self.settings)
 
 		if camp is None:
 			camp = job.user.create_campaign(self.now)
