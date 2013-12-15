@@ -9,12 +9,14 @@ class BaseSelector(object):
 
 	__metaclass__ = ABCMeta
 
+	def __init__(self, settings):
+		self._settings = settings
+
 	@abstractmethod
-	def find_campaign(self, job, settings):
+	def find_campaign(self, job):
 		"""
 		Find and return the campaign to which the job will be added.
 		Return None if this job starts a new campaign.
-		#TODO IN:OUT
 		"""
 		raise NotImplemented
 
@@ -23,7 +25,10 @@ class VirtualSelector(BaseSelector):
 	"""
 	"""
 
-	def find_campaign(self, job, settings):
+	def __init__(self, *args):
+		BaseSelector.__init__(self, *args)
+
+	def find_campaign(self, job):
 		"""
 		Check the job submit time against the last campaign
 		creation time extended by threshold value.
@@ -33,12 +38,12 @@ class VirtualSelector(BaseSelector):
 
 		if user.active_camps:
 			last = user.active_camps[-1]
-			if job.submit < last.created + settings.threshold:
+			if job.submit < last.created + self._settings.threshold:
 				return last
 		elif user.completed_camps:
 			# a campaign could end without surpassing the threshold
 			last = user.completed_camps[-1]
-			if job.submit < last.created + settings.threshold:
+			if job.submit < last.created + self._settings.threshold:
 				# move the campaign back to active ones
 				user.completed_camps.pop()
 				user.active_camps.append(last)

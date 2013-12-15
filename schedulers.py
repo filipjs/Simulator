@@ -8,7 +8,7 @@ class OStrichSimulator(BaseSimulator):
 	"""
 
 	def __init__(self, *args):
-		super(OStrichSimulator, self).__init__(*args)
+		BaseSimulator.__init__(self, *args)
 
 	def _job_camp_key(self, job):
 		"""
@@ -37,7 +37,7 @@ class FairshareSimulator(BaseSimulator):
 	"""
 
 	def __init__(self, *args):
-		super(FairshareSimulator, self).__init__(*args)
+		BaseSimulator.__init__(self, *args)
 
 	def _job_camp_key(self, job):
 		"""

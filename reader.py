@@ -71,7 +71,7 @@ class SWFReader(BaseReader):
 			else:
 				count = 1
 			for i in range(count):
-				BaseReader.next_job({
+				BaseReader.next_job(self, {
 					'id': stats[self.job_id],
 					'user': stats[self.user_id],
 					'proc': stats[self.proc],

@@ -9,6 +9,9 @@ class BaseEstimator(object):
 
 	__metaclass__ = ABCMeta
 
+	def __init__(self, settings):
+		self._settings = settings
+
 	def initial_estimate(self, job):
 		"""
 		"""
@@ -41,6 +44,9 @@ class BaseEstimator(object):
 class SimpleEstimator(BaseEstimator):
 	"""
 	"""
+
+	def __init__(self, *args):
+		BaseEstimator.__init__(self, *args)
 
 	def _get_initial(self, job):
 		"""

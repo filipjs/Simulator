@@ -188,7 +188,7 @@ if __name__=="__main__":
 	for temp in Settings.templates:
 		alg_group.add_argument('--' + temp[0], type=type(temp[2]),
 			default=temp[2], metavar=temp[3], help=temp[1])
-
+#TODO ARGUMENTY DO WYBIERANIA NAZWY KLAS POSZCZEGOLNYCH CZESCI SYMULACJI
 	args = vars(parser.parse_args())
 	# manual check of the --cpu_xx arguments [required and exclusive]
 	if not args['cpu_count'] and not args['cpu_percentile']:
