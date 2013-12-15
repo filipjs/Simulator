@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from simulation import BaseSimulator # TODO zmiana lib pozniej
+from simulator import BaseSimulator
 
 
 class OStrichSimulator(BaseSimulator):

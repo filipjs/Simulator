@@ -1,196 +1,309 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import sys
-import time
-import argparse
-from reader import SWFReader, ICMReader
+import heapq
+import itertools
+import math
+from abc import ABCMeta, abstractmethod
 
 
-##
-## User run time estimate functions.
-##
-
-def clairvoyance(job):
+class Events(object):
 	"""
-	Perfect estimate.
+	The ordering of the events is important since
+	it is used in a priority queue to break ties.
 	"""
-	return job.run_time
+	new_job = 1
+	job_end = 2
+	campaign_end = 3
+	force_decay = 4
 
-def round_up(job):
+
+class PriorityQueue(object):
 	"""
-	Rounded up to the nearest time unit.
+	A priority queue of <time, event, entity>, ordered by time.
+	Ties are ordered by the event type.
 	"""
-	unit = 60 * 60 # in seconds
-	count = (job.run_time / unit) + 1
-	return count * unit
+	REMOVED = 'removed-event'
 
-def default_mode(job):
+	def __init__(self):
+		self._pq = []
+		self._entries = {}
+		self._counter = itertools.count()
+
+	def add(self, time, event, entity):
+		"""
+		Add an entity event to the queue.
+		"""
+		key = (event, entity) # must be a unique key
+		if key in self._entries:
+			self._remove_event(key)
+		# counter prevents the comparison of entities,
+		# in case the time and the event are the same
+		entry = [time, event, next(self._counter), entity]
+		self._entries[key] = entry
+		heapq.heappush(self._pq, entry)
+
+	def pop(self):
+		"""
+		Remove and return the next upcoming event.
+		Raise KeyError if queue is empty.
+		"""
+		if not self.empty():
+			time, event, _, entity = heapq.heappop(self._pq)
+			key = (event, entity)
+			del self._entries[key]
+			return time, event, entity
+		raise KeyError('pop from an empty priority queue')
+
+	def empty(self):
+		"""
+		Check if the queue is empty.
+		"""
+		self._pop_removed()
+		return bool(self._pq)
+
+	def _remove_event(self, key):
+		"""
+		Mark an existing event as removed.
+		"""
+		entry = self._entries.pop(key)
+		entry[-1] = self.REMOVED
+
+	def _pop_removed(self):
+		"""
+		Process the queue to the first non-removed event.
+		"""
+		while self._pq and self._pq[0][-1] == self.REMOVED:
+			heapq.heappop(self._pq)
+
+
+class BaseSimulator(object):
 	"""
-	Predefined value.
+	Defines the flow of the simulation.
+	Simultaneously maintains statistics about
+	virtual campaigns and effective cpu usage.
 	"""
-	return 60 * 60 * 24 * 7 # in seconds
 
-# pick one
-get_job_estimate = clairvoyance
+	__metaclass__ = ABCMeta
 
+	def __init__(self, jobs, users, cpus, settings):
+		self.cpu_limit = cpus
+		self.cpu_used = 0
+		self.future_jobs = jobs
+		self.running_jobs = []
+		self.waiting_jobs = []
+		self.users = users
+		self.active_shares = 0
+		self.settings = settings
 
-##
-## Algorithms specific settings to read the from command line.
-##
+	def run(self):
+		"""
+		Proceed with the simulation.
+		Returns a list of encountered events.
+		"""
+		self.results = []
 
-class Settings(object):
-	"""
-	To create a new setting add a 4-tuple to the templates list.
-	The tuple consists of:
-		(name, description, default value, time unit [or None])
-	Possible time units: SEC, MINS, HOURS, DAYS.
-	"""
-	templates = [
-		('threshold', "Campaign threshold", 10, "MINS"),
-		('avg_users', "Average number of concurrent users", 50, None),
-		('decay', "The decay period of the CPU usage", 24, "HOURS")
-	]
+		self.pq = PriorityQueue() # events priority queue
+		# the first job submit is the simulation 'time zero'
+		self.prev_event = self.now = self.future_jobs[0].submit
 
-	time_units = {"MINS": 60, "HOURS": 60*60, "DAYS": 60*60*24}
+		# Note: cpu usage decay is always applied after each event.
+		# There is also a dummy force_decay event inserted into
+		# the queue to force the calculations in case the gap
+		# between consecutive events would be too long.
+		self.decay_factor = 1 - (0.693 / self.settings.decay)
+		self.force_period = 60
 
-	def __init__(self, **kwargs):
-		for temp in self.templates:
-			name = temp[0]
-			value = kwargs.get(name)
-			# change the time unit if applicable
-			if temp[3] in self.time_units:
-				value *= self.time_units[temp[3]]
-			# set the attribute
-			setattr(self, name, value)
+		count = 0
+		submits = len(self.future_jobs)
 
+		while count < submits or not self.pq.empty():
+			# no need to add more than one event of this type
+			if count < submits:
+				self.pq.add(
+					self.future_jobs[count].submit,
+					Events.new_job,
+					self.future_jobs[count]
+				)
+				count += 1
+			# the queue cannot be empty here
+			self.now, event, entity = self.pq.pop()
 
-def divide_jobs(jobs, first_job, block_time, block_margin):
-	"""
-	Divide the jobs into potentially many smaller blocks.
-	Each block can have extra jobs to fill up the cluster.
-	IN:
-	- jobs - list of all the jobs
-	- first_job - ID of the first job to start with
-	- block_time - length of each block in seconds or None
-	- block_margin - extra length added to the block on both sides
-	OUT:
-	- a list of consecutive blocks - a block is a dict of indexes
-	{left [margin start]:first [block job]:last [block job]:right [margin end]}
-	"""
-	for i, j in enumerate(jobs):
-		if j.ID == first_job:
-			break
-	else:
-		print "ERROR: job ID", first_job, "not found"
-		sys.exit(1)
+			# process the time skipped between events
+			diff = self.now - self.prev_event
+			if diff:
+				self._process_virtual(diff)
+				self._process_real(diff)
 
-	# 'i' now points to first job of the first block
-	blocks = []
+			# TODO lista -> <time, utility>
+			# TODO printy eventow aka job end,
+			# TODO i jednak camp start??? bo utility wtedy
 
-	while i < len(jobs):
-		b = {'first': i}
-		st = jobs[i].submit
+			# do work based on the event type
+			if event == Events.new_job:
+				self.new_job_event(entity)
+			elif event == Events.job_end:
+				self.job_end_event(entity)
+			elif event == Events.campaign_end:
+				self.camp_end_event(entity)
+			elif event == Events.force_decay:
+				pass
+			else:
+				raise Exception('unknown event')
 
-		while i >= 0 and st - jobs[i].submit <= block_margin:
-			i -= 1
+			if event != Events.force_decay:
+				# don't update on force_decay since nothing has changed
+				self._update_camp_estimates()
+			if not self.pq.empty():
+				# the simulation has ended if the queue is empty
+				self._force_next_decay()
 
-		b['left'] = i + 1
-		i = b['first']
+			# update event timer
+			self.prev_event = self.now
+		# return simulation results
+		return self.results
 
-		while i < len(jobs) and (not block_time or jobs[i].submit - st <= block_time):
-			i += 1
+	def _share_value(self, user):
+		"""
+		Calculate the user share of the available resources.
+		"""
+		share = float(u.shares) / self.active_shares
+		return share * self.cpu_used
 
-		b['last'] = i - 1
+	def _process_virtual(self, period):
+		"""
+		Distribute virtual time to active users.
+		"""
+		for u in self.users:
+			if u.active:
+				u.virtual_work(period * self._share_value(u))
 
-		while i < len(jobs) and jobs[i].submit - st <= block_time + block_margin:
-			i += 1
+	def _process_real(self, period):
+		"""
+		Account the real work done by the jobs.
+		Apply the rolling decay to each user usage.
+		"""
+		real_decay = self.decay_factor ** period
+		for u in self.users:
+			u.real_work(period, real_decay)
 
-		b['right'] = i - 1
-		i = b['last']
+	def _update_camp_estimates(self):
+		"""
+		Update estimated campaign end times in the virtual schedule.
+		Only the first campaign is considered from each user,
+		since the subsequent campaigns are guaranteed to end later.
+		"""
+		for u in self.users:
+			if u.active:
+				first_camp = u.active_camps[0]
+				est = first_camp.time_left / self._share_value(u)
+				est = self.now + int(math.ceil(est)) # must be int
+				self.pq.add(
+					est,
+					Events.campaign_end,
+					first_camp
+				)
 
-		if not block_time or jobs[i].submit - st > block_time / 2:
-			# block must be at least half the desired length
-			blocks.append(b)
-		# next block starts right after the previous one, excluding the margins
-		i = i + 1
-	return blocks
+	def _force_next_decay(self):
+		"""
+		Add the next decay event.
+		"""
+		self.pq.add(
+			self.now + self.force_period,
+			Events.force_decay,
+			"Dummy event"
+		)
 
+	def _schedule(self):
+		"""
+		Try to execute the highest priority jobs from
+		the waiting_jobs list.
+		"""
 
-def main(args):
+		#sort the jobs using the defined ordering
+		self.waiting_jobs.sort(key=self._job_priority_key)
 
-	print args
-	return 0
-	#TODO select reader based on extenstion
-	reader = SWFReader()
-	jobs = reader.parse_workload(args['workload'], args['serial'])
-	jobs.sort(key=lambda j: j.submit) # order by submit time
+		while self.waiting_jobs:
+			free = self.cpu_limit - self.cpu_used
+			if self.waiting_jobs[0].proc <= free:
+				# execute the job
+				job = self.waiting_jobs.pop(0)
+				job.start_execution()#TODO TIME)
+				self.cpu_used += job.proc
+				self.running_jobs.append(job)
 
-	for j in jobs:
-		# add user run time estimates
-		j.estimate = get_job_estimate(j)
+				self.pq.add(
+					#TODO time + job.run_time
+					Events.job_end,
+					job
+				)
+			else:
+				# only top priority can be scheduled
+				break
+		pass
 
-	if not args['job_id']:
-		args['job_id'] = jobs[0].ID
+		#TODO backfilling
+		# if still left free and not empty waiting -> self._backfill()
 
-	# change hours to seconds
-	block_time = args['block_time'] and args['block_time'] * 3600
-	block_margin = args['block_margin'] * 3600
-#TODO set user ost&fair shares -> fair przy kazdym bloku
-	blocks = divide_jobs(jobs, args['job_id'], block_time, block_margin)
-#TODO all users -> do symulacji tylko tych ktorzy tam wystepuja + reset
+	def new_job_event(self, job):
+		"""
+		Add the job to a campaign and do a scheduling pass.
+		Update the user activity status.
+		"""
+		if not job.user.active:
+			# user will be active after this job submission
+			self.active_shares += job.user.shares
 
-	for b in blocks:
-		full_slice = jobs[b['left']:b['right']+1] # block includes both ends
+		camp = self._find_campaign(job, job.user) #TODO selector.find..
 
-		cpus = args['cpus'] # TODO
+		if camp is None:
+			camp = job.user.create_campaign(self.now)
+			#TODO print <camp start event> aka utility
 
-#TODO for each algo job.reset -> get results -> drop margins -> save to file?
-		for j in full_slice:
-			j.reset()
+		camp.add_job(job)
+		camp.sort_jobs(key=self._job_camp_key)
 
-		#run_ostrich(job_slice, first_sub, last_sub, cpus)
-		#run_fairshare(job_slice, first_sub, last_sub, cpus)
+		self.waiting_jobs.append(job)
+		self._schedule()
 
-		first_sub = jobs[b['first']].submit
-		last_sub = jobs[b['last']].submit
+	def job_end_event(self, job):
+		"""
+		Free the resources and do a scheduling pass.
+		"""
+		job.execution_ended(self.now)
+		# the job predicted run time could be higher than the
+		# real run time, so we need to redistribute any extra
+		# virtual time created by the mentioned difference
+		job.user.virtual_work(0)
 
-		if args['one_block']:
-			break
+		# remove the job from the processors
+		self.running_jobs.remove(job)
+		self.cpu_used -= job.proc
+		self._schedule()
 
+	def camp_end_event(self, camp):
+		"""
+		Remove the campaign. Update the user activity status.
+		"""
+		assert camp.user.active_camps[0] == camp
+		assert camp.time_left == 0
 
-if __name__=="__main__":
+		camp.user.active_camps.pop(0)
+		camp.user.completed_camps.append(camp)
 
-	parser = argparse.ArgumentParser(description="Simulate a cluster from a workload file")
+		if not camp.user.active:
+			# user became inactive
+			self.active_shares -= camp.user.shares
 
-	sim_group = parser.add_argument_group('Simulation', 'General simulation parameters')
-	sim_group.add_argument('--title', default=time.ctime(),
-			help="Title of the simulation")
-	sim_group.add_argument('--job_id', type=int, help="Start from the job with this ID")
-	sim_group.add_argument('--block_time', metavar="HOURS", type=int,
-			help="Divide simulation into 'block_time' long parts")
-	sim_group.add_argument('--block_margin', metavar="HOURS", type=int, default=0,
-			help="Extra simulation time to fill up the cluster")
-	sim_group.add_argument('--one_block', action='store_true',
-			help="Simulate only the first block")
-	sim_group.add_argument('--serial', action='store_true',
-			help="Change parallel jobs to serial")
-	sim_group.add_argument('--cpu_count', type=int,
-			help="Set a static number of CPUs")
-	sim_group.add_argument('--cpu_percentile', metavar='P-th', type=int,
-			help="Set the number of CPUs to the P-th percentile")
-	sim_group.add_argument('workload', help="Workload file")
+	@abstractmethod
+	def _job_camp_key(self, job):
+		"""
+		Job key function for the inner campaign sort.
+		"""
+		raise NotImplemented
 
-	# automatically build the rest of the arguments
-	alg_group = parser.add_argument_group('Algorithm', 'Algorithm specific parameters')
-	for temp in Settings.templates:
-		alg_group.add_argument('--' + temp[0], type=type(temp[2]),
-			default=temp[2], metavar=temp[3], help=temp[1])
-
-	args = vars(parser.parse_args())
-	# manual check of the --cpu_xx arguments [required and exclusive]
-	if not args['cpu_count'] and not args['cpu_percentile']:
-		parser.error("one of the arguments --cpu_count --cpu_percentile is required")
-	if args['cpu_count'] and args['cpu_percentile']:
-		parser.error("argument --cpu_count not allowed with argument --cpu_percentile")
-	# run the simulation
-	main(args)
+	@abstractmethod
+	def _job_priority_key(self, job):
+		"""
+		Job key function for the scheduler waiting queue sort.
+		"""
+		raise NotImplemented
