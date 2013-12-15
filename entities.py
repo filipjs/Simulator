@@ -114,8 +114,7 @@ class Campaign(object):
 		return self._remaining + self._completed
 	@property
 	def time_left(self):
-		# self.virtual is a float
-		# and we want an integer value
+		# self.virtual is a float and we want an int
 		return self.workload - int(self.virtual)
 	@property
 	def active(self):
@@ -138,6 +137,10 @@ class Campaign(object):
 		self.active_jobs.remove(job)
 		self.completed_jobs.append(job)
 
+	def job_inc_estimate(self, job, diff):
+		# update the workload
+		self._remaining += diff * job.proc
+
 	def sort_jobs(self, job_cmp):
 		self.active_jobs.sort(key=job_key)
 		for i, job in enumerate(self.active_jobs):
@@ -155,7 +158,7 @@ class User(object):
 	def __init__(self, uid):
 		self._id = uid
 		self.camp_count = 0
-		self.shares = None
+		self.shares = ReadOnlyAttr()
 
 	def reset(self):
 		assert not self.active_camps

@@ -12,9 +12,27 @@ class BaseEstimator(object):
 	def initial_estimate(self, job):
 		"""
 		"""
+		est = self._get_initial(job)
+		assert job.estimate is None
+		return est
+
+	def next_estimate(self, job):
+		"""
+		"""
+		prev = job.estimate
+		est = self._get_next(job, prev)
+		assert job.estimate == prev
+		assert est > prev
+		return est
+
+	@abstractmethod
+	def _get_initial(self, job):
+		"""
+		"""
 		raise NotImplemented
 
-	def next_estimate(self, job, prev_estimate):
+	@abstractmethod
+	def _get_next(self, job, prev_estimate):
 		"""
 		"""
 		raise NotImplemented
@@ -24,14 +42,12 @@ class SimpleEstimator(BaseEstimator):
 	"""
 	"""
 
-	def initial_estimate(self, job):
+	def _get_initial(self, job):
 		"""
 		"""
 		return job.time_limit
 
-	def next_estimate(self, job, prev_estimate):
+	def _get_next(self, job, prev_estimate):
 		"""
 		"""
-		raise Exception("job run longer than time limit")
-
-
+		raise Exception("job run time longer than time limit")
