@@ -1,6 +1,24 @@
 # -*- coding: utf-8 -*-
 
 
+class ReadOnlyAttr(object):
+	"""
+	A data descriptor that permits only
+	one setter invocation (from None to value).
+	"""
+	def __init__(self):
+		self._val = None
+
+	def __get__(self, obj, objtype):
+		if self._val is None:
+			raise AttributeError("attribute not set")
+		return self._val
+	def __set__(self, obj, val):
+		if self._val is not None:
+			raise AttributeError("read-only attribute")
+		self._val = val
+
+
 class Job(object):
 	"""
 	A single job with the relevant properties.
@@ -10,13 +28,14 @@ class Job(object):
 	def __init__(self, stats, user):
 		self._stats = stats
 		self._user = user
-		self.estimate = None
+		self.time_limit = ReadOnlyAttr()
 
 	def reset(self):
-		self._camp = None
+		self._camp = ReadOnlyAttr()
 		self._camp_index = None
 		self._start = None
 		self._completed = False
+		self.estimate = None
 
 	@property
 	def ID(self):
@@ -42,13 +61,6 @@ class Job(object):
 	@property
 	def completed(self):
 		return self._completed
-	@property
-	def camp(self):
-		return self._camp
-	@camp.setter
-	def camp(self, v):
-		assert self._camp is None
-		self._camp = v
 
 	def start_execution(self, t):
 		assert self.start_time is None
@@ -65,10 +77,11 @@ class Job(object):
 		self._user.job_ended(self)
 
 	def __str__(self):
-		return "{} {} {} {} {} {} {} {}".format(self.ID,
-			self.user.ID, self.camp.ID, self.proc,
-			self.submit, self.start_time,
-			self.run_time, self.estimate)
+		return "{} {} {} {} {} {} {} {} {}".format(
+			self.ID, self.user.ID, self.camp.ID,
+			self.proc, self.submit, self.start_time,
+			self.run_time, self.time_limit, self.estimate
+		)
 
 
 class Campaign(object):
