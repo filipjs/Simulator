@@ -253,12 +253,14 @@ class BaseSimulator(object):
 			# user will be active after this job submission
 			self.active_shares += job.user.shares
 
-		camp, fresh = self._find_campaign(job, job.user)
+		camp = self._find_campaign(job, job.user) #TODO selector.find..
+
+		if camp is None:
+			camp = job.user.create_campaign(self.now)
+			#TODO print <camp start event> aka utility
+
 		camp.add_job(job)
 		camp.sort_jobs(key=self._job_camp_key)
-
-		#TODO if fresh: print <camp start event> aka utility
-		#TODO ew. to dopiero po wywolaniu schedule??
 
 		self.waiting_jobs.append(job)
 		self._schedule()
@@ -291,14 +293,6 @@ class BaseSimulator(object):
 		if not camp.user.active:
 			# user became inactive
 			self.active_shares -= camp.user.shares
-
-	@abstractmethod
-	def _find_campaign(self, job, user):
-		"""
-		Find and return the campaign to which the job will be added.
-		Also return True/False if that campaign was just created.
-		"""
-		raise NotImplemented
 
 	@abstractmethod
 	def _job_camp_key(self, job):

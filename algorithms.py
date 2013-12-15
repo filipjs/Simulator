@@ -1,36 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from simulation import BaseSimulator # TODO zmiana lib pozniej
-from entities import Campaign
-
-
-##
-## Campaign selection algorithm shared by both simulators
-##
-
-def _virtual_based_campaigns(self, job, user):
-	"""
-	Check the job submit time against the last campaign creation time
-	extended by threshold value.
-	Create a new campaign if the submit time is out of range.
-	"""
-	if user.active_camps:
-		last = user.active_camps[-1]
-		if job.submit < last.created + self.settings.threshold:
-			return last, False
-	elif user.completed_camps:
-		# a campaign could have ended without passing the threshold
-		last = user.completed_camps[-1]
-		if job.submit < last.created + self.settings.threshold:
-			# move the campaign back as active
-			user.completed_camps.pop()
-			user.active_camps.append(last)
-			return last, False
-	# need a new campaign
-	new_camp = Campaign(user.camp_count, user, job.submit)
-	user.camp_count += 1
-	user.active_camps.append(new_camp)
-	return new_camp, True
 
 
 class OStrichSimulator(BaseSimulator):
@@ -39,8 +9,6 @@ class OStrichSimulator(BaseSimulator):
 
 	def __init__(self, *args):
 		super(OStrichSimulator, self).__init__(*args)
-
-	_find_campaign = _virtual_based_campaigns
 
 	def _job_camp_key(self, job):
 		"""
@@ -71,8 +39,6 @@ class FairshareSimulator(BaseSimulator):
 	def __init__(self, *args):
 		super(FairshareSimulator, self).__init__(*args)
 
-	_find_campaign = _virtual_based_campaigns
-
 	def _job_camp_key(self, job):
 		"""
 		Do nothing.
@@ -91,4 +57,3 @@ class FairshareSimulator(BaseSimulator):
 		# we are however only interested in the ordering so we can
 		# skip the constant values to greatly simplify the formula
 		return (fairshare, job.submit)
-

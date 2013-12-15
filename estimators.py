@@ -50,4 +50,4 @@ class SimpleEstimator(BaseEstimator):
 	def _get_next(self, job, prev_estimate):
 		"""
 		"""
-		raise Exception("job run time longer than time limit")
+		raise Exception("job exceeded its time limit")

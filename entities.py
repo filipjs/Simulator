@@ -157,7 +157,7 @@ class User(object):
 	"""
 	def __init__(self, uid):
 		self._id = uid
-		self.camp_count = 0
+		self._global_count = 0
 		self.shares = ReadOnlyAttr()
 
 	def reset(self):
@@ -205,3 +205,9 @@ class User(object):
 		# update processor count
 		self._occupied_cpus -= job.proc
 		self.completed_jobs.append(job)
+
+	def create_campaign(self, time):
+		new_camp = Campaign(self._global_count, self, time)
+		self._global_count += 1
+		self.active_camps.append(new_camp)
+		return new_camp
