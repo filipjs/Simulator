@@ -31,11 +31,11 @@ def default_mode(job):
 	return 60 * 60 * 24 * 7 # in seconds
 
 # pick one
-get_job_estimate = clairvoyance
+get_time_limit = clairvoyance #TODO A TO GDZIE PRZENIESC??
 
 
 ##
-## Algorithms specific settings to read the from command line.
+## Specific settings to read the from command line.
 ##
 
 class Settings(object):
@@ -47,8 +47,7 @@ class Settings(object):
 	"""
 	templates = [
 		('threshold', "Campaign threshold", 10, "MINS"),
-		('avg_users', "Average number of concurrent users", 50, None),
-		('decay', "The decay period of the CPU usage", 24, "HOURS")
+		('decay', "The half-decay period of the CPU usage", 24, "HOURS")
 	]
 
 	time_units = {"MINS": 60, "HOURS": 60*60, "DAYS": 60*60*24}
@@ -126,8 +125,11 @@ def main(args):
 	jobs.sort(key=lambda j: j.submit) # order by submit time
 
 	for j in jobs:
-		# add user run time estimates
-		j.estimate = get_job_estimate(j)
+		# ADD TIME LIMIT
+		pass
+
+	#TODO GATHER USERS
+	#TODO ADD SHARES
 
 	if not args['job_id']:
 		args['job_id'] = jobs[0].ID
@@ -135,7 +137,7 @@ def main(args):
 	# change hours to seconds
 	block_time = args['block_time'] and args['block_time'] * 3600
 	block_margin = args['block_margin'] * 3600
-#TODO set user ost&fair shares -> fair przy kazdym bloku
+
 	blocks = divide_jobs(jobs, args['job_id'], block_time, block_margin)
 #TODO all users -> do symulacji tylko tych ktorzy tam wystepuja + reset
 
