@@ -121,15 +121,16 @@ def main(args):
 	return 0
 	#TODO select reader based on extenstion
 	reader = SWFReader()
-	jobs = reader.parse_workload(args['workload'], args['serial'])
+	jobs, users = reader.parse_workload(args['workload'], args['serial'])
 	jobs.sort(key=lambda j: j.submit) # order by submit time
 
 	for j in jobs:
-		# ADD TIME LIMIT
+		# TODO ADD TIME LIMIT
 		pass
 
-	#TODO GATHER USERS
-	#TODO ADD SHARES
+	for u in users.itervalues():
+		#TODO ADD SHARES
+		pass
 
 	if not args['job_id']:
 		args['job_id'] = jobs[0].ID

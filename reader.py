@@ -15,15 +15,16 @@ class BaseReader(object):
 		"""
 		A wrapper around the main parse method overloaded in subclasses.
 		IN:
-		- filenamae - path to workload file
+		- filename - path to some workload file
 		- serial - change parallel jobs to multiple serial ones
 		OUT:
-		- a list of `Jobs` already linked to `User` instances.
+		- a list of `Jobs` already linked to `User` instances
+		- a dictionary of created `User` instances
 		"""
 		self.jobs = []
 		self.users = {}
 		self._parse(filename, serial)
-		return self.jobs
+		return self.jobs, self.users
 
 	def _next_job(self, stats):
 		"""
@@ -45,8 +46,10 @@ class BaseReader(object):
 
 class SWFReader(BaseReader):
 	"""
-	Field numbers in a .swf file.
+	Parser for the .swf workload files.
 	"""
+
+	# field numbers
 	job_id = 0
 	submit = 1
 	wait_time = 2
@@ -79,9 +82,10 @@ class SWFReader(BaseReader):
 
 class ICMReader(BaseReader):
 	"""
-	Field numbers in an ICM log file.
+	Parser for the ICM workload dump.
 	"""
 
+	# field numbers
 	def _parse(self, filename, serial):
 		raise NotImplemented
 		#TODO
