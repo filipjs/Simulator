@@ -1,34 +1,67 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from abc import ABCMeta, abstractmethod
+
+"""
+Selectors:
+	A selector is used to assign each submitted job
+	to an appropriate campaign or to make a decision
+	to create a new campaign.
+
+Customizing:
+	Create a new subclass of `BaseSelector` and override the required methods.
+	To add new settings to use in your subclass see :class: `Settings` documentation.
+"""
 
 
 class BaseSelector(object):
 	"""
+	Selectors base class. Subclasses are required to override:
+
+	1) _get_camp
+
+	You can access the `Settings` using `self._settings`.
 	"""
 
 	__metaclass__ = ABCMeta
 
 	def __init__(self, settings):
+		"""
+		Args:
+		  settings: `Settings` instance
+		"""
 		self._settings = settings
 
-	@abstractmethod
 	def find_campaign(self, job):
 		"""
-		Find and return the campaign to which the job will be added.
-		Return None if this job starts a new campaign.
+		Public wrapper method.
+		Run and check the correctness of `_get_camp`.
+		"""
+		camp = self._get_camp(job)
+		if camp is not None:
+			assert not camp.active_jobs.count(job)
+			assert job.user.active_camps.count(camp)
+		return camp
+
+	@abstractmethod
+	def _get_camp(self, job):
+		"""
+		Select the campaign to which the job will be added.
+		This campaign **MUST BE** in the `user.active_camps`.
+
+		Returns:
+		  the selected campaign or `None` if the job starts
+		    a new campaign.
 		"""
 		raise NotImplemented
 
 
 class VirtualSelector(BaseSelector):
 	"""
+	Campaign selection based only on the virtual schedule.
+	Uses `Settings.threshold` in the calculations.
 	"""
 
-	def __init__(self, *args):
-		BaseSelector.__init__(self, *args)
-
-	def find_campaign(self, job):
+	def _get_camp(self, job):
 		"""
 		Check the job submit time against the last campaign
 		creation time extended by threshold value.

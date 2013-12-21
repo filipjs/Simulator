@@ -2,12 +2,13 @@
 from abc import ABCMeta, abstractmethod
 
 """
-Estimators hierarchy. An estimator is used to predict a job run time.
-Note, that this is different from the job *time limit*.
+Estimators:
+	An estimator is used to predict a job run time.
+	Note, that this is different from the job *time limit*.
 
 Customizing:
 	Create a new subclass of `BaseEstimator` and override the required methods.
-	To add new settings to use in your estimator see :class: `Settings` documentation.
+	To add new settings to use in your subclass see :class: `Settings` documentation.
 """
 
 
@@ -18,7 +19,6 @@ class BaseEstimator(object):
 	1) _get_initial
 	2) _get_next
 
-	Subclasses must also call `BaseEstimator.__init__`.
 	You can access the `Settings` using `self._settings`.
 	"""
 
@@ -79,11 +79,8 @@ class BaseEstimator(object):
 
 class NaiveEstimator(BaseEstimator):
 	"""
-	An estimator that doesn't do anything.
+	An estimator that does anything.
 	"""
-
-	def __init__(self, *args):
-		BaseEstimator.__init__(self, *args)
 
 	def _get_initial(self, job):
 		"""
