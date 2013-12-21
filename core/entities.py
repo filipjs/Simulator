@@ -3,11 +3,11 @@
 
 class ReadOnlyAttr(object):
 	"""
-	A data descriptor that permits only
+	A data descriptor that permits only a maximum of
 	one setter invocation (from None to value).
 	"""
-	def __init__(self):
-		self._val = None
+	def __init__(self, value=None):
+		self._val = value
 
 	def __get__(self, obj, objtype):
 		if self._val is None:
@@ -22,10 +22,14 @@ class ReadOnlyAttr(object):
 class Job(object):
 	"""
 	A single job with the relevant properties.
-	Correct usage scheme:
+	Correct usage scheme for each simulation:
 		reset -> camp.setter -> start_execution -> execution_ended
 	"""
 	def __init__(self, stats, user):
+		"""
+		Required entries in stats:
+			id, proc, submit, run_time
+		"""
 		self._stats = stats
 		self._user = user
 		self.time_limit = ReadOnlyAttr()
@@ -33,7 +37,7 @@ class Job(object):
 	def reset(self):
 		self._camp = ReadOnlyAttr()
 		self._camp_index = None
-		self._start = None
+		self._start = ReadOnlyAttr()
 		self._completed = False
 		self.estimate = None
 
@@ -63,13 +67,13 @@ class Job(object):
 		return self._completed
 
 	def start_execution(self, t):
-		assert self.start_time is None
 		self._start = t
 		# notify further
 		self._camp.job_started(self)
 		self._user.job_started(self)
 
 	def execution_ended(self, t):
+		assert self._completed == False
 		assert self.end_time == t
 		self._completed = True
 		# notify further
@@ -88,11 +92,12 @@ class Campaign(object):
 	"""
 	A user campaign with the appropriate jobs.
 	A campaign is active if it is running in the virtual schedule.
+	Completed_jobs are ordered by the execution end time.
 	"""
-	def __init__(self, id, user, time_stamp):
+	def __init__(self, id, user, time):
 		self._id = id
 		self._user = user
-		self._created = time_stamp
+		self._created = time
 		self._remaining = 0
 		self._completed = 0
 		self.virtual = 0
@@ -127,8 +132,7 @@ class Campaign(object):
 		job.camp = self # backward link
 
 	def job_started(self, job):
-		# nothing happens at this time
-		pass
+		pass # nothing happens at this time
 
 	def job_ended(self, job):
 		# update the run time to the real value
@@ -137,9 +141,10 @@ class Campaign(object):
 		self.active_jobs.remove(job)
 		self.completed_jobs.append(job)
 
-	def job_inc_estimate(self, job, diff):
+	def job_new_estimate(self, job, old_value):
 		# update the workload
-		self._remaining += diff * job.proc
+		self._remaining -= old_value * job.proc
+		self._remaining += job.estimate * job.proc
 
 	def sort_jobs(self, job_cmp):
 		self.active_jobs.sort(key=job_key)
@@ -151,9 +156,10 @@ class Campaign(object):
 class User(object):
 	"""
 	User account with campaign lists and usage stats.
-	Active_camps are ordered by creation time.
-	Completed_camps are ordered by virtual end time.
-	Completed_jobs are ordered by execution end time.
+	A user is active if he has a campaign in the virtual schedule.
+	Active_camps are ordered by the creation time.
+	Completed_camps are ordered by the virtual end time.
+	Completed_jobs are ordered by the execution end time.
 	"""
 	def __init__(self, uid):
 		self._id = uid
@@ -176,12 +182,13 @@ class User(object):
 	@property
 	def active(self):
 		return bool(self.active_camps)
-
 	@property
 	def cpu_clock_used(self):
 		return round(self._cpu_clock_used, 3)
 
 	def virtual_work(self, value):
+		"""
+		"""
 		total = reduce(lambda x, y: x + y.virtual, self.active_camps, value)
 		offset = 0
 		for camp in self.active_camps:
@@ -194,6 +201,8 @@ class User(object):
 		self._lost_virtual += total
 
 	def real_work(self, value, real_decay):
+		"""
+		"""
 		self._cpu_clock_used += self._occupied_cpus * value
 		self._cpu_clock_used *= real_decay
 

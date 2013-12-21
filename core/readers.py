@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from abc import ABCMeta, abstractmethod
 from entities import Job, User
@@ -71,7 +70,7 @@ class SWFReader(BaseReader):
 			else:
 				count = 1
 			for i in range(count):
-				BaseReader.next_job(self, {
+				BaseReader._next_job(self, {
 					'id': stats[self.job_id],
 					'user': stats[self.user_id],
 					'proc': stats[self.proc],

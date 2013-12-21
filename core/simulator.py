@@ -140,6 +140,9 @@ class BaseSimulator(object):
 			# TODO lista -> <time, utility>
 			# TODO printy eventow aka job end,
 			# TODO i jednak camp start??? bo utility wtedy
+#TODO KONIEC KAMP = KONIEC OSTATNIEJ PRACY
+#TODO A NIE KONIEC CAMP W VIRT
+#TODO I CO TERAZ JAK KONIEC PRAC ALE NIE KONIEC THRESHOLD??
 
 			# do work based on the event type
 			if event == Events.new_job:
