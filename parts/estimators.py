@@ -91,4 +91,4 @@ class NaiveEstimator(BaseEstimator):
 		"""
 		Raise an exception since this shouldn't be called.
 		"""
-		raise Exception("job exceeded its time limit")
+		raise Exception('job exceeded its time limit')

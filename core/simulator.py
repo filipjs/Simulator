@@ -216,7 +216,7 @@ class BaseSimulator(object):
 		self.pq.add(
 			self.now + self.force_period,
 			Events.force_decay,
-			"Dummy event"
+			'Dummy event'
 		)
 
 	def _schedule(self):

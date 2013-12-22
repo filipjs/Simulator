@@ -56,14 +56,16 @@ class SWFReader(BaseReader):
 	proc = 4
 	user_id = 11
 	partition = 15
-
+#TODO PRZENIESC OPEN FILE DO SUPEr CLASS
+##TODO PRZENIESC TEZ ITERACJE PO LINES??
 	def _parse(self, filename, serial):
-		for line in open(filename):
+		f = open(filename)
+		for line in f:
 			if line[0] == ';':
-				continue # skip comments
+				continue  # skip comments
 			stats = map(int, line.split())
 			if stats[SWF.run_time] <= 0 or stats[SWF.proc] <= 0:
-				continue # skip incomplete data
+				continue  # skip incomplete data
 			if serial:
 				count = stats[SWF.proc]
 				stats[SWF.proc] = 1
@@ -77,6 +79,7 @@ class SWFReader(BaseReader):
 					'submit': stats[self.submit],
 					'run_time': stats[self.run_time],
 				})
+		f.close()
 
 
 class ICMReader(BaseReader):

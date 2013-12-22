@@ -73,7 +73,7 @@ class Job(object):
 		self._user.job_started(self)
 
 	def execution_ended(self, t):
-		assert self._completed == False
+		assert not self._completed
 		assert self.end_time == t
 		self._completed = True
 		# notify further
@@ -81,7 +81,7 @@ class Job(object):
 		self._user.job_ended(self)
 
 	def __str__(self):
-		return "{} {} {} {} {} {} {} {} {}".format(
+		return '{} {} {} {} {} {} {} {} {}'.format(
 			self.ID, self.user.ID, self.camp.ID,
 			self.proc, self.submit, self.start_time,
 			self.run_time, self.time_limit, self.estimate

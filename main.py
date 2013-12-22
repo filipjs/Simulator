@@ -21,7 +21,7 @@ class Settings(object):
 		('threshold', "Campaign threshold", 10, "MINS"),
 		('decay', "The half-decay period of the CPU usage", 24, "HOURS"),
 		#TODO PARTITION_LIMIT FOR SUBMITTER 	return 60 * 60 * 24 * 7 # in seconds
-		#TODO Users `Settings.shares_file` to read from.
+		#TODO Users `Settings.share_file` to read from.
 	]
 
 	time_units = {"MINS": 60, "HOURS": 60*60, "DAYS": 60*60*24}

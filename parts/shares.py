@@ -41,7 +41,7 @@ class BaseShare(object):
 	@abstractmethod
 	def _get_share(self, user):
 		"""
-		Return the number of shares to assign to the user.
+		Get the number of shares to assign to the user.
 
 		Note:
 		  **DO NOT** set the `user.shares` yourself.
@@ -60,8 +60,8 @@ class EqualShare(BaseShare):
 
 class CustomShare(BaseShare):
 	"""
-	Read the shares values from a file.
-	Users `Settings.shares_file` to read from.
+	Read the share values from a file.
+	Users `Settings.share_file` to read from.
 	"""
 
 	def __init__(self, *args):
@@ -71,14 +71,15 @@ class CustomShare(BaseShare):
 		BaseShare.__init__(self, *args)
 
 		self._shares = {}
-		for line in open(self._settings.shares_file):
-			if line:
-				# non-empty line consists of a pair <user, share>
-				user, share = map(int, line.split())
-				self._shares[user] = share
+		with open(self._settings.share_file) as f:
+			for line in f:
+				if line:
+					# line consists of a pair <uid, share>
+					uid, share = map(int, line.split())
+					self._shares[uid] = share
 
 	def _get_share(self, user):
 		"""
-		Return the value from the file or a default value.
+		Return the value read from the file or a default value.
 		"""
 		return self._shares.get(user.ID, 1)
