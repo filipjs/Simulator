@@ -49,7 +49,7 @@ class BaseSelector(object):
 		Note:
 		  This campaign **MUST BE** in the `user.active_camps`.
 		  Also **DO NOT** add the job to any of the campaign
-		    job lists.
+		    job lists yourself.
 
 		Returns:
 		  the selected campaign or `None` if the job starts
