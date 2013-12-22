@@ -92,7 +92,7 @@ class FairshareScheduler(BaseScheduler):
 		"""
 		Do nothing. Not using campaigns to determine the priority.
 		"""
-		return job.ID
+		return job.submit
 
 	def _job_priority_key(self, job):
 		"""
@@ -100,7 +100,7 @@ class FairshareScheduler(BaseScheduler):
 		Ties are ordered by earlier submit.
 		"""
 		fairshare = job.user.cpu_clock_used / job.user.shares
-		# The full formula for SLURM Fairshare priority is:
+		# The full formula for SLURM fairshare priority is:
 		#   pow(2.0, -(effective_usage / shares_norm)), where
 		#     effective_usage = my usage / global usage
 		#     shares_norm = my share / total shares
