@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from abc import ABCMeta, abstractmethod
-from entities import Job, User
+from entities import Job, User #TODO ZMIENIC IMPORT TYLKO NA MODULE??
 
 
 class BaseReader(object):

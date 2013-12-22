@@ -1,40 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import argparse
 import sys
 import time
-import argparse
-from reader import SWFReader, ICMReader
-
-
-##
-## Specific settings to read the from command line.
-##
-
-class Settings(object):
-	"""
-	To create a new setting add a 4-tuple to the templates list.
-	The tuple consists of:
-		(name, description, default value, time unit [or None])
-	Possible time units: SEC, MINS, HOURS, DAYS.
-	"""
-	templates = [
-		('threshold', "Campaign threshold", 10, "MINS"),
-		('decay', "The half-decay period of the CPU usage", 24, "HOURS"),
-		#TODO PARTITION_LIMIT FOR SUBMITTER 	return 60 * 60 * 24 * 7 # in seconds
-		#TODO Users `Settings.share_file` to read from.
-	]
-
-	time_units = {"MINS": 60, "HOURS": 60*60, "DAYS": 60*60*24}
-
-	def __init__(self, **kwargs):
-		for temp in self.templates:
-			name = temp[0]
-			value = kwargs.get(name)
-			# change the time unit if applicable
-			if temp[3] in self.time_units:
-				value *= self.time_units[temp[3]]
-			# set the attribute
-			setattr(self, name, value)
+from reader import SWFReader, ICMReader #TODO ZMIENIC IMPORT READOW NA TYLKO MODULE??
 
 
 def divide_jobs(jobs, first_job, block_time, block_margin):

@@ -22,7 +22,7 @@ class PriorityQueue(object):
 	A priority queue of <time, event, entity>, ordered by time.
 	Ties are ordered by the event type.
 	"""
-	REMOVED = 'removed-event'
+	_REMOVED = 'removed-event'
 
 	def __init__(self):
 		self._pq = []
@@ -66,13 +66,13 @@ class PriorityQueue(object):
 		Mark an existing event as removed.
 		"""
 		entry = self._entries.pop(key)
-		entry[-1] = self.REMOVED
+		entry[-1] = self._REMOVED
 
 	def _pop_removed(self):
 		"""
 		Process the queue to the first non-removed event.
 		"""
-		while self._pq and self._pq[0][-1] == self.REMOVED:
+		while self._pq and self._pq[0][-1] == self._REMOVED:
 			heapq.heappop(self._pq)
 
 

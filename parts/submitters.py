@@ -62,8 +62,8 @@ class OracleSubmitter(BaseSubmitter):
 class DefaultTimeSubmitter(BaseSubmitter):
 	"""
 	Always return a predefined valued.
-	Uses `Settings.partition_limit` as that value.
+	Uses `Settings.default_limit` as that value.
 	"""
 
 	def _get_limit(self, job):
-		return self._settings.partition_limit
+		return max(job.runtime, self._settings.default_limit)

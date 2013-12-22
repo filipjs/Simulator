@@ -61,7 +61,7 @@ class EqualShare(BaseShare):
 class CustomShare(BaseShare):
 	"""
 	Read the share values from a file.
-	Users `Settings.share_file` to read from.
+	Uses `Settings.share_file` to read from.
 	"""
 
 	def __init__(self, *args):
