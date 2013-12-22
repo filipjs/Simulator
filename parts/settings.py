@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 
-
 """
 Module gathering all the settings from different parts of the system.
 
 Module attributes:
-  time_units: a dictionary mapping possible time units to seconds.
+  time_units: a dictionary mapping the permitted time units to seconds.
 """
 
 time_units = {'SEC': 1, 'MINS': 60, 'HOURS': 60*60, 'DAYS': 60*60*24}
@@ -13,7 +12,7 @@ time_units = {'SEC': 1, 'MINS': 60, 'HOURS': 60*60, 'DAYS': 60*60*24}
 
 class Template(object):
 	"""
-	A class that corresponds with a single settings.
+	A class that corresponds to a single setting.
 
 	Attributes:
 	  name: setting name.
@@ -21,7 +20,7 @@ class Template(object):
 	  default: some sensible default value, required.
 	  time_unit: required if the setting represents time.
 
-	Time units:
+	Time unit:
 	  see `time_units`.
 	"""
 
@@ -29,17 +28,19 @@ class Template(object):
 		self.name = name
 		self.desc = desc
 		self.default = default
-		self.time_unit = time_unit
 		if time_unit is not None:
-			assert time_unit in time_units
+			self.time_unit = time_unit.upper()
+			assert self.time_unit in time_units
+		else:
+			self.time_unit = time_unit
 
 
 class Settings(object):
 	"""
 	A class containing all of the custom settings.
 
-	To create a new setting simply add an appropriate `Template`
-	to the templates list.
+	To create a new setting simply add an appropriate
+	`Template` instance to the templates list.
 	"""
 
 	templates = [

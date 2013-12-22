@@ -3,7 +3,6 @@
 import heapq
 import itertools
 import math
-from abc import ABCMeta, abstractmethod
 
 
 class Events(object):
@@ -302,17 +301,3 @@ class BaseSimulator(object):
 		if not camp.user.active:
 			# user became inactive
 			self.active_shares -= camp.user.shares
-
-	@abstractmethod
-	def _job_camp_key(self, job):
-		"""
-		Job key function for the inner campaign sort.
-		"""
-		raise NotImplemented
-
-	@abstractmethod
-	def _job_priority_key(self, job):
-		"""
-		Job key function for the scheduler waiting queue sort.
-		"""
-		raise NotImplemented

@@ -1,18 +1,67 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from simulator import BaseSimulator
+from abc import ABCMeta, abstractmethod
+
+"""
+Schedulers:
+	A scheduler is used to decide about the job priority during the simulation process.
+
+Customizing:
+	Create a new subclass of `BaseScheduler` and override the required methods.
+	To add new settings to use in your subclass see :class: `Settings` documentation.
+"""
 
 
-class OStrichSimulator(BaseSimulator):
+class BaseScheduler(object):
 	"""
+	Schedulers base class. Subclasses are required to override:
+
+	1) _job_camp_key
+	2) _job_priority_key
+
+	You can access the `Settings` using `self._settings`.
 	"""
 
-	def __init__(self, *args):
-		BaseSimulator.__init__(self, *args)
+	__metaclass__ = ABCMeta
+
+	def __init__(self, settings):
+		"""
+		Init the class with a `Settings` instance.
+		"""
+		self._settings = settings
+
+	@abstractmethod
+	def _job_camp_key(self, job):
+		"""
+		``Key`` function for the ``list.sort`` method.
+		Extract a comparison key from the job for the
+		inside-campaign sort.
+
+		Note:
+		  Lower value corresponds to a **HIGHER** priority.
+		"""
+		raise NotImplemented
+
+	@abstractmethod
+	def _job_priority_key(self, job):
+		"""
+		``Key`` function for the ``list.sort`` method.
+		Extract a comparison key from the job for the
+		scheduler waiting list sort.
+
+		Note:
+		  Lower value corresponds to a **HIGHER** priority.
+		"""
+		raise NotImplemented
+
+
+class OStrichScheduler(BaseScheduler):
+	"""
+	Default implementation of the OStrich algorithm.
+	"""
 
 	def _job_camp_key(self, job):
 		"""
-		Order by shortest run time estimate.
+		Order by shorter run time estimate.
 		Ties are ordered by earlier submit.
 		"""
 		return (job.estimate, job.submit)
@@ -20,40 +69,41 @@ class OStrichSimulator(BaseSimulator):
 	def _job_priority_key(self, job):
 		"""
 		Priority ordering for the scheduler:
-		1) shortest ending campaigns
-		2) earliest campaigns
-		3) inside campaigns use the job existing ordering
+		1) faster ending campaigns
+		2) earlier created campaigns
+		3) user ID (needed to break previous ties)
+		4) priority inside campaigns
 		"""
 		end = job.camp.time_left + job.camp.offset
 		end = float(end) / job.user.shares
-		# the end should be further multiplied by (active_shares / cpu_used)
-		# but that is a constant value and we are only interested in the ordering
-		# and not the absolute value, so we can skip that
-		return (end, job.camp.created, job.camp_index)
+		# The `end` should be further multiplied by
+		#   `Simulator.active_shares` / `Simulator.cpu_used`.
+		# However, that gives the same value for all the jobs
+		# and we only need the ordering, not the absolute value.
+		return (end, job.camp.created, job.user.ID, job.camp_index)
 
 
-class FairshareSimulator(BaseSimulator):
+class FairshareScheduler(BaseScheduler):
 	"""
+	SLURM implementation of the Fairshare algorithm.
 	"""
-
-	def __init__(self, *args):
-		BaseSimulator.__init__(self, *args)
 
 	def _job_camp_key(self, job):
 		"""
-		Do nothing.
+		Do nothing. Not using campaigns to determine the priority.
 		"""
 		return job.ID
 
 	def _job_priority_key(self, job):
 		"""
-		Order by the most under-serviced user account.
+		Prioritize the jobs based on the owner's account service level.
+		Ties are ordered by earlier submit.
 		"""
 		fairshare = job.user.cpu_clock_used / job.user.shares
-		# the full formula for fairshare priority is:
-		# 	pow(2.0, -(usage_efctv / shares_norm))
-		# effective usage = my usage / global usage
-		# shares_norm = my share / total shares
-		# we are however only interested in the ordering so we can
-		# skip the constant values to greatly simplify the formula
+		# The full formula for SLURM Fairshare priority is:
+		#   pow(2.0, -(effective_usage / shares_norm)), where
+		#     effective_usage = my usage / global usage
+		#     shares_norm = my share / total shares
+		# However, we are only interested in the ordering, so we can
+		# skip the constant values to greatly simplify the formula.
 		return (fairshare, job.submit)
