@@ -26,8 +26,7 @@ class BaseEstimator(object):
 
 	def __init__(self, settings):
 		"""
-		Args:
-		  settings: `Settings` instance
+		Init the class with a `Settings` instance.
 		"""
 		self._settings = settings
 
@@ -79,7 +78,7 @@ class BaseEstimator(object):
 
 class NaiveEstimator(BaseEstimator):
 	"""
-	An estimator that does anything.
+	An estimator that does nothing.
 	"""
 
 	def _get_initial(self, job):

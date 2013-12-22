@@ -7,34 +7,6 @@ from reader import SWFReader, ICMReader
 
 
 ##
-## User run time estimate functions.
-##
-
-def clairvoyance(job):
-	"""
-	Perfect estimate.
-	"""
-	return job.run_time
-
-def round_up(job):
-	"""
-	Rounded up to the nearest time unit.
-	"""
-	unit = 60 * 60 # in seconds
-	count = (job.run_time / unit) + 1
-	return count * unit
-
-def default_mode(job):
-	"""
-	Predefined value.
-	"""
-	return 60 * 60 * 24 * 7 # in seconds
-
-# pick one
-get_time_limit = clairvoyance #TODO A TO GDZIE PRZENIESC??
-
-
-##
 ## Specific settings to read the from command line.
 ##
 
@@ -47,7 +19,8 @@ class Settings(object):
 	"""
 	templates = [
 		('threshold', "Campaign threshold", 10, "MINS"),
-		('decay', "The half-decay period of the CPU usage", 24, "HOURS")
+		('decay', "The half-decay period of the CPU usage", 24, "HOURS"),
+		#TODO PARTITION_LIMIT FOR SUBMITTER 	return 60 * 60 * 24 * 7 # in seconds
 	]
 
 	time_units = {"MINS": 60, "HOURS": 60*60, "DAYS": 60*60*24}

@@ -26,8 +26,7 @@ class BaseSelector(object):
 
 	def __init__(self, settings):
 		"""
-		Args:
-		  settings: `Settings` instance
+		Init the class with a `Settings` instance.
 		"""
 		self._settings = settings
 
@@ -46,7 +45,11 @@ class BaseSelector(object):
 	def _get_camp(self, job):
 		"""
 		Select the campaign to which the job will be added.
-		This campaign **MUST BE** in the `user.active_camps`.
+
+		Note:
+		  This campaign **MUST BE** in the `user.active_camps`.
+		  Also **DO NOT** add the job to any of the campaign
+		    job lists.
 
 		Returns:
 		  the selected campaign or `None` if the job starts
