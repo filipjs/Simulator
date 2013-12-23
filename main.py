@@ -156,30 +156,32 @@ class MyArgumentParser(argparse.ArgumentParser):
 		#TODO SKIP COMMENTS
 
 
-desc = """Run a cluster simulation:
-    `main.py run [SIM_OPTS] [ALG_OPTS] [PART_OPTS] <workload_file>`
+desc = """INSTRUCTIONS
+------------------------------------------------------------------
+To run a cluster simulation:
+    `%(prog)s run [SIM_OPTS][ALG_OPTS][PART_OPTS] <workload_file>`
 To read the options from a config file:
-    `main.py run @myconfig <workload_file>`
+    `%(prog)s run @myconfig <workload_file>`
 
 You can generate a template of the configuration:
-    `main.py config --generate`.
+    `%(prog)s config --generate`.
 You can also recreate a config from a simulation:
-    `main.py config --recreate <sim_file>`
+    `%(prog)s config --recreate <sim_file>`
+------------------------------------------------------------------
 """
 
 
 if __name__=="__main__":
 
-	#TODO PROLOG, EPILOG, USAGE
 	parser = MyArgumentParser(description=desc,
 				  formatter_class=argparse.RawDescriptionHelpFormatter)
-
-				  #fromfile_prefix_chars='@',
-				  #formatter_class = MyHelpFormatter,
-	subparsers = parser.add_subparsers(help='sub-command help')
+	subparsers = parser.add_subparsers(help='Select a command')
 
 	# run simulation parser
-	run_parser = subparsers.add_parser('a', help='a help')
+	run_parser = subparsers.add_parser('run',
+					   help='Run a simulation',
+					   fromfile_prefix_chars='@',
+					   formatter_class=MyHelpFormatter)
 	run_parser.add_argument('workload', help='The workload file')
 
 	sim_group = run_parser.add_argument_group('General simulation parameters')
@@ -192,12 +194,12 @@ if __name__=="__main__":
 	arguments_from_templates(part_group, parts.settings.part_templates)
 
 	# config parser
-	config_parser = subparsers.add_parser('b', help='b help')
+	config_parser = subparsers.add_parser('config', help='Create configuration')
 
 	action_group = config_parser.add_mutually_exclusive_group(required=True)
 	action_group.add_argument('--generate', action='store_true',
 				  help='Generate a new configuration template.')
-	action_group.add_argument('--recreate', help='Recreate the configuration '
-				  'from a previous simulation')
+	action_group.add_argument('--recreate', metavar='SIM FILE',
+				  help='Recreate the configuration from a simulation')
 
 	main(vars(parser.parse_args()))
