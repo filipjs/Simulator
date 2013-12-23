@@ -15,8 +15,7 @@ class BaseScheduler(object):
 	"""
 	Schedulers base class. Subclasses are required to override:
 
-	1) _job_camp_key
-	2) _job_priority_key
+	1) _job_priority_key
 
 	You can access the `Settings` using `self._settings`.
 	"""
@@ -28,18 +27,6 @@ class BaseScheduler(object):
 		Init the class with a `Settings` instance.
 		"""
 		self._settings = settings
-
-	@abstractmethod
-	def _job_camp_key(self, job):
-		"""
-		``Key`` function for the ``list.sort`` method.
-		Extract a comparison key from the job for the
-		inside-campaign sort.
-
-		Note:
-		  Lower value corresponds to a **HIGHER** priority.
-		"""
-		raise NotImplemented
 
 	@abstractmethod
 	def _job_priority_key(self, job):
@@ -59,10 +46,12 @@ class OStrichScheduler(BaseScheduler):
 	Default implementation of the OStrich algorithm.
 	"""
 
-	def _job_camp_key(self, job):
+	def _job_camp_index(self, job):
 		"""
-		Order by shorter run time estimate.
-		Ties are ordered by earlier submit.
+		This assumes that the compared jobs are from
+		the same campaign.
+		Inside campaigns order by shorter run time estimate.
+		In case of ties order by earlier submit.
 		"""
 		return (job.estimate, job.submit)
 
@@ -71,8 +60,9 @@ class OStrichScheduler(BaseScheduler):
 		Priority ordering for the scheduler:
 		1) faster ending campaigns
 		2) earlier created campaigns
-		3) user ID (needed to break previous ties)
+		3) user ID, camp ID (needed to break previous ties)
 		4) priority inside campaigns
+		     (previous ties iff jobs are from the same campaign)
 		"""
 		end = job.camp.time_left + job.camp.offset
 		end = float(end) / job.user.shares
@@ -80,19 +70,14 @@ class OStrichScheduler(BaseScheduler):
 		#   `Simulator.active_shares` / `Simulator.cpu_used`.
 		# However, that gives the same value for all the jobs
 		# and we only need the ordering, not the absolute value.
-		return (end, job.camp.created, job.user.ID, job.camp_index)
+		camp_prio = self._job_camp_index(job)
+		return (end, job.camp.created, job.user.ID, job.camp.ID, camp_prio)
 
 
 class FairshareScheduler(BaseScheduler):
 	"""
 	SLURM implementation of the Fairshare algorithm.
 	"""
-
-	def _job_camp_key(self, job):
-		"""
-		Do nothing. Not using campaigns to determine the priority.
-		"""
-		return job.submit
 
 	def _job_priority_key(self, job):
 		"""

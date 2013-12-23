@@ -7,6 +7,7 @@ Module attributes:
   time_units: a dictionary mapping the permitted time units to seconds.
   alg_templates: a combined list of all the algorithm specific settings.
   part_templates: a list describing chosen system parts.
+  sim_templates: a list of general simulation settings.
 
 Customizing:
   To create new settings for your algorithm simply add an appropriate `Template`

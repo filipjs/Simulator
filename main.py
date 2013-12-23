@@ -169,7 +169,7 @@ def config(args):
 	"""
 	Create a configuration file based on `Template` lists.
 	Generating takes default values.
-	Recreating takes values from a file with simulation results.
+	Recreating takes values from a file with the simulation results.
 	"""
 	if args['generate']:
 		values = {}
@@ -200,8 +200,7 @@ def config(args):
 
 		print '--{:15}{}'.format(temp.name, str_value(value))
 		print '# {}: (default) {} {}'.format(
-		           temp.desc, str_value(temp.default), unit
-		       )
+		           temp.desc, str_value(temp.default), unit)
 		if temp.loc is not None:
 			print '# Used by `{}` class.'.format(temp.loc)
 
@@ -282,7 +281,7 @@ class MyArgumentParser(argparse.ArgumentParser):
 	def convert_arg_line_to_args(self, arg_line):
 		"""
 		Parse the file skipping comments and using
-		whitespace as argument delimiter.
+		any whitespace as argument delimiter.
 		"""
 		if arg_line.startswith('#'):
 			return

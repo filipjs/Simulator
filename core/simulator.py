@@ -264,7 +264,7 @@ class Simulator(object):
 		#TODO ESTIMATE MUSI BYC NA PEWNO PRZED .ADD_JOB
 		job.estimate = self.estimator.initial_estimate(job)
 		camp = self.selector.find_campaign(job)
-
+#TODO DODAC TEZ DO USER>ACTIVE_JOBS
 		if camp is None:
 			camp = job.user.create_campaign(self.now)
 			#TODO print <camp start event> aka utility
