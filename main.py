@@ -60,10 +60,10 @@ def divide_jobs(jobs, first_job, block_time, block_margin):
 	return blocks
 
 
-def main(args):
+def run(args):
 	"""
 	"""
-	print args
+	print "RUNWWW", args
 	return 0
 	#TODO select reader based on extenstion
 #TODO DODAC TIME.CTIME DO TITLE! default=time.ctime(),
@@ -106,6 +106,41 @@ def main(args):
 
 		if args['one_block']:
 			break
+
+
+def config(args):
+	"""
+	"""
+	def print_template(temp):
+		value = temp.default # PRZY CREATE DEFAULT
+		#args[temp.name] #TODO TO PRZY RECREATE, MAMY JUZ USTALONE WARTOSCI
+
+		if type(value) == type(True):
+			# boolean values
+			prefix = '' if value else '#'
+			str_val = ''
+			verbose = '(uncomment to take effect)'
+		else:
+			prefix = ''
+			str_val = str(value)
+			metavar = temp.time_unit or ''
+			verbose = '(default {} {})'.format(temp.default, metavar)
+
+		name = prefix + '--' + temp.name
+
+
+		print '{:20}{:20}'.format(name, str_val)
+		print '# {}, {}'.format(temp.desc, verbose)
+		if temp.loc is not None:
+			print '# Used by `{}`'.format(temp.loc)
+
+	#TODO RECREATE
+	print '##\n## General simulation parameters\n##\n'
+	map(print_template, parts.settings.sim_templates)
+	print '\n##\n## Algorithm specific parameters\n##\n'
+	map(print_template, parts.settings.alg_templates)
+	print '\n##\n## Part selection parameters\n##\n'
+	map(print_template, parts.settings.part_templates)
 
 
 def arguments_from_templates(parser, templates):
@@ -152,34 +187,37 @@ class MyArgumentParser(argparse.ArgumentParser):
 		for arg in arg_line.split():
 			if not arg.strip():
 				continue
+			print arg
 			yield arg
 		#TODO SKIP COMMENTS
 
 
-desc = """INSTRUCTIONS
-------------------------------------------------------------------
+run_usage = '`%(prog)s run [SIM_OPTS][ALG_OPTS][PART_OPTS] workload_file`'
+
+global_desc = """INSTRUCTIONS
+----------------------------------------------------------------
 To run a cluster simulation:
-    `%(prog)s run [SIM_OPTS][ALG_OPTS][PART_OPTS] <workload_file>`
+    {}
 To read the options from a config file:
-    `%(prog)s run @myconfig <workload_file>`
+    `%(prog)s run @myconfig workload_file`
 
 You can generate a template of the configuration:
     `%(prog)s config --generate`.
 You can also recreate a config from a simulation:
-    `%(prog)s config --recreate <sim_file>`
-------------------------------------------------------------------
-"""
+    `%(prog)s config --recreate sim_file`
+----------------------------------------------------------------
+""".format(run_usage)
 
 
 if __name__=="__main__":
 
-	parser = MyArgumentParser(description=desc,
+	parser = MyArgumentParser(description=global_desc,
 				  formatter_class=argparse.RawDescriptionHelpFormatter)
-	subparsers = parser.add_subparsers(help='Select a command')
+	subparsers = parser.add_subparsers(dest='command', help='Select a command')
 
 	# run simulation parser
-	run_parser = subparsers.add_parser('run',
-					   help='Run a simulation',
+	run_parser = subparsers.add_parser('run', help='Run a simulation',
+					   usage=run_usage,
 					   fromfile_prefix_chars='@',
 					   formatter_class=MyHelpFormatter)
 	run_parser.add_argument('workload', help='The workload file')
@@ -202,4 +240,10 @@ if __name__=="__main__":
 	action_group.add_argument('--recreate', metavar='SIM FILE',
 				  help='Recreate the configuration from a simulation')
 
-	main(vars(parser.parse_args()))
+	args = vars(parser.parse_args())
+	if args['command'] == 'run':
+		run(args)
+	elif args['command'] == 'config':
+		config(args)
+	else:
+		print "Hmm..."
