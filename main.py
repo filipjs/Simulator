@@ -162,9 +162,9 @@ To read the options from a config file:
     `main.py run @myconfig <workload_file>`
 
 You can generate a template of the configuration:
-    `main.py config --generate <out_file>`.
+    `main.py config --generate`.
 You can also recreate a config from a simulation:
-    `main.py config --simulation <sim_file> <out_file>`
+    `main.py config --recreate <sim_file>`
 """
 
 
@@ -176,16 +176,28 @@ if __name__=="__main__":
 
 				  #fromfile_prefix_chars='@',
 				  #formatter_class = MyHelpFormatter,
+	subparsers = parser.add_subparsers(help='sub-command help')
 
-	parser.add_argument('workload', help='The workload file')
+	# run simulation parser
+	run_parser = subparsers.add_parser('a', help='a help')
+	run_parser.add_argument('workload', help='The workload file')
 
-	sim_group = parser.add_argument_group('General simulation parameters')
+	sim_group = run_parser.add_argument_group('General simulation parameters')
 	arguments_from_templates(sim_group, parts.settings.sim_templates)
 
-	alg_group = parser.add_argument_group('Algorithm specific parameters')
+	alg_group = run_parser.add_argument_group('Algorithm specific parameters')
 	arguments_from_templates(alg_group, parts.settings.alg_templates)
 
-	part_group = parser.add_argument_group('Part selection parameters')
+	part_group = run_parser.add_argument_group('Part selection parameters')
 	arguments_from_templates(part_group, parts.settings.part_templates)
+
+	# config parser
+	config_parser = subparsers.add_parser('b', help='b help')
+
+	action_group = config_parser.add_mutually_exclusive_group(required=True)
+	action_group.add_argument('--generate', action='store_true',
+				  help='Generate a new configuration template.')
+	action_group.add_argument('--recreate', help='Recreate the configuration '
+				  'from a previous simulation')
 
 	main(vars(parser.parse_args()))
