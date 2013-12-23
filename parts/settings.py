@@ -47,8 +47,9 @@ class Template(object):
 
 time_units = {'SEC': 1, 'MINS': 60, 'HOURS': 60*60, 'DAYS': 60*60*24}
 
-# Add your settings here.
+
 alg_templates = [
+	# Add your settings here.
 	Template('threshold', 'The campaign selection threshold', 10, 'MINS',
 		 loc='VirtualSelector'),
 	Template('decay', 'The half-decay period of the CPU usage', 24, 'HOURS',
@@ -76,7 +77,7 @@ part_templates = [
 	Template('estimator', 'The estimator class', 'NaiveEstimator'),
 	Template('submitter', 'The submitter class', 'OracleSubmitter'),
 	Template('selector', 'The selector class', 'VirtualSelector'),
-	Template('scheduler', 'The scheduler classes',
+	Template('schedulers', 'The scheduler classes',
 		 ['OStrichScheduler', 'FairshareScheduler']),
 	Template('share', 'The share assigner class', 'EqualShare')
 ]

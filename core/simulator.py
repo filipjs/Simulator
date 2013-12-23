@@ -75,7 +75,7 @@ class PriorityQueue(object):
 			heapq.heappop(self._pq)
 
 
-class BaseSimulator(object):
+class Simulator(object):
 	"""
 	Defines the flow of the simulation.
 	Simultaneously maintains statistics about
@@ -84,8 +84,12 @@ class BaseSimulator(object):
 
 	__metaclass__ = ABCMeta
 
-	def __init__(self, jobs, users, cpus, settings, estimator, selector):
+	def __init__(self, jobs, users, cpus, settings, parts):
+		"""
+		#TODO users == dict
+		#TODO jobs == list
 		#TODO POZAMIENIAC TO NA PRIVATE ZMIENNE CO NIE?
+		"""
 		self.cpu_limit = cpus
 		self.cpu_used = 0
 		self.future_jobs = jobs
@@ -94,8 +98,7 @@ class BaseSimulator(object):
 		self.users = users
 		self.active_shares = 0
 		self.settings = settings
-		self.estimator = estimator
-		self.selector = selector
+		self.parts = parts
 
 	def run(self):
 		"""
@@ -141,7 +144,6 @@ class BaseSimulator(object):
 			# TODO i jednak camp start??? bo utility wtedy
 #TODO KONIEC KAMP = KONIEC OSTATNIEJ PRACY
 #TODO A NIE KONIEC CAMP W VIRT
-#TODO I CO TERAZ JAK KONIEC PRAC ALE NIE KONIEC THRESHOLD??
 
 			# do work based on the event type
 			if event == Events.new_job:
@@ -178,7 +180,7 @@ class BaseSimulator(object):
 		"""
 		Distribute virtual time to active users.
 		"""
-		for u in self.users:
+		for u in self.users.iteritems():
 			if u.active:
 				u.virtual_work(period * self._share_value(u))
 
@@ -188,7 +190,7 @@ class BaseSimulator(object):
 		Apply the rolling decay to each user usage.
 		"""
 		real_decay = self.decay_factor ** period
-		for u in self.users:
+		for u in self.users.iteritems():
 			u.real_work(period, real_decay)
 
 	def _update_camp_estimates(self):
@@ -197,7 +199,7 @@ class BaseSimulator(object):
 		Only the first campaign is considered from each user,
 		since the subsequent campaigns are guaranteed to end later.
 		"""
-		for u in self.users:
+		for u in self.users.iteritems():
 			if u.active:
 				first_camp = u.active_camps[0]
 				est = first_camp.time_left / self._share_value(u)

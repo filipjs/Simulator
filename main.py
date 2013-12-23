@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import argparse
+import importlib
 import sys
 import time
-from core import parsers, simulation
+from core import parsers#, simulator
 from parts import settings
 
 
@@ -14,7 +15,7 @@ def divide_jobs(jobs, first_job, block_time, block_margin):
 
 	Args:
 	  jobs: list of all the jobs.
-	  first_job: ID of the first job to start with.
+	  first_job: ID of the first job to start with or ``zero``.
 	  block_time: length of each block in seconds or ``zero``.
 	  block_margin: extra length added to the block on both sides.
 
@@ -22,12 +23,15 @@ def divide_jobs(jobs, first_job, block_time, block_margin):
 	  a list of consecutive blocks - a block is a dict of indexes
 	    {left [margin start]:first [block job]:last [block job]:right [margin end]}
 	"""
-	for i, j in enumerate(jobs):
-		if j.ID == first_job:
-			break
+	if first_job:
+		for i, j in enumerate(jobs):
+			if j.ID == first_job:
+				break
+		else:
+			print "ERROR: job ID", first_job, "not found"
+			sys.exit(1)
 	else:
-		print "ERROR: job ID", first_job, "not found"
-		sys.exit(1)
+		i = 0
 
 	# 'i' now points to first job of the first block
 	blocks = []
@@ -61,55 +65,85 @@ def divide_jobs(jobs, first_job, block_time, block_margin):
 	return blocks
 
 
+def load_class(module_name, class_name):
+	"""
+	Load a class the the module.
+	"""
+	m = importlib.import_module('parts.' + module_name)
+	c = getattr(m, class_name)
+	return c
+
+
 def run(args):
 	"""
 	"""
-	#TODO ZMIENILY SIE PARAMS: TERAZ 0 == NONE
-	print "RUNWWW", args
-	return 0
+	#TODO NA SAMYM POCZATKU PRINT ARGS, ZA MOMENT JE ZMIENIAMY??
 
+	# encapsulate different settings
+	sim_set = settings.Settings(settings.sim_templates, **args)
+	alg_set = settings.Settings(settings.alg_templates, **args)
 
+	# now transform parts settings
+	# load common parts
+	common_parts = ['estimator', 'submitter', 'selector', 'share']
+	for part in common_parts:
+		cl = load_class(part+'s', args[part])
+		args[part] = cl(alg_set)
 
+	# load schedulers : we will do one simulation per scheduler
+	schedulers = []
+	for cl_name in args['schedulers']:
+		cl = load_class('schedulers', cl_name)
+		schedulers.append(cl(alg_set))
+
+	# finally create parts settings
+	part_set = settings.Settings(settings.part_templates, **args)
+
+	# parse the workload
 	parser = parsers.get_parser(args['workload'])
 
-	jobs, users = parser.parse_workload(args['workload'], args['serial'])
+	jobs, users = parser.parse_workload(sim_set.workload, sim_set.serial)
 	jobs.sort(key=lambda j: j.submit)  # order by submit time
 
+	# calculate missing values
 	for j in jobs:
-		# TODO ADD TIME LIMIT
-		pass
+		j.time_time = part_set.submitter.time_limit(j)
 
 	for u in users.itervalues():
-		#TODO ADD SHARES
-		pass
+		u.shares = part_set.share.user_share(u)
 
-	if not args['job_id']:
-		args['job_id'] = jobs[0].ID
+	# divide into blocks
+	blocks = divide_jobs(jobs, sim_set.job_id, sim_set.block_time, sim_set.block_margin)
 
-	# change hours to seconds
-	block_time = args['block_time'] and args['block_time'] * 3600
-	block_margin = args['block_margin'] * 3600
+	for sched in schedulers:
+		# set the current scheduler
+		part_set.scheduler = sched
 
-	blocks = divide_jobs(jobs, args['job_id'], block_time, block_margin)
-#TODO all users -> do symulacji tylko tych ktorzy tam wystepuja + reset
-#TODO DODAC TIME.CTIME DO TITLE! default=time.ctime(),
-	for b in blocks:
-		full_slice = jobs[b['left']:b['right']+1] # block includes both ends
+		for b in blocks:
+			# block includes both ends
+			job_slice = jobs[b['left']:b['right']+1]
+			# calculate the CPU number
+			cpus = args['cpus'] # TODO
+			# reset entities
+			users_slice = {}
+			for j in job_slice:
+				j.reset()
+				slice_users[j.user.ID] = j.user
+			for u in slice_users.itervalue():
+				u.reset()
+			# run the simulation
+			simulator = simulator.Simulator(job_slice, users_slice,
+							cpus, alg_set, part_set)
+			results_slice = simulator.run()
 
-		cpus = args['cpus'] # TODO
+			# TODO TUTAJ SAVE RESULTS
+			if sim_args.one_block:
+				break
 
-#TODO for each algo job.reset -> get results -> drop margins -> save to file?
-		for j in full_slice:
-			j.reset()
-
-		#run_ostrich(job_slice, first_sub, last_sub, cpus)
-		#run_fairshare(job_slice, first_sub, last_sub, cpus)
-
-		first_sub = jobs[b['first']].submit
-		last_sub = jobs[b['last']].submit
-
-		if args['one_block']:
-			break
+#first_sub = jobs[b['first']].submit
+#last_sub = jobs[b['last']].submit
+#TODO get results -> drop margins (AKA EXTRA FLAGA Z PRZODU) -> save to file
+#TODO DODAC TIME.CTIME DO FILENAME! default=time.ctime(),
 
 
 def config(args):
@@ -143,6 +177,7 @@ def config(args):
 def arguments_from_templates(parser, templates):
 	"""
 	"""
+
 	def str2bool(v):
 		return v.lower() == 'true'
 
