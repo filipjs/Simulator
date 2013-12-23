@@ -111,26 +111,20 @@ def run(args):
 def config(args):
 	"""
 	"""
+	values = {}
+	if args['generate']:
+		values = {}
+	else:
+	        from ast import literal_eval
+		with open(args['recreate']) as f:
+			values = literal_eval(f.readline())
+
 	def print_template(temp):
-		value = temp.default # PRZY CREATE DEFAULT
-		#args[temp.name] #TODO TO PRZY RECREATE, MAMY JUZ USTALONE WARTOSCI
+		value = values.get(temp.name, temp.default)
+		unit = temp.time_unit or ''
 
-		if type(value) == type(True):
-			# boolean values
-			prefix = '' if value else '#'
-			str_val = ''
-			verbose = '(uncomment to take effect)'
-		else:
-			prefix = ''
-			str_val = str(value)
-			metavar = temp.time_unit or ''
-			verbose = '(default {} {})'.format(temp.default, metavar)
-
-		name = prefix + '--' + temp.name
-
-
-		print '{:20}{:20}'.format(name, str_val)
-		print '# {}, {}'.format(temp.desc, verbose)
+		print '--{:15}{}'.format(temp.name, str(value))
+		print '# {}: (default) {} {}'.format(temp.desc, temp.default, unit)
 		if temp.loc is not None:
 			print '# Used by `{}`'.format(temp.loc)
 
@@ -146,6 +140,9 @@ def config(args):
 def arguments_from_templates(parser, templates):
 	"""
 	"""
+	def str2bool(v):
+		return v.lower() == 'true'
+
 	for temp in templates:
 		assert temp.default is not None
 
@@ -153,16 +150,13 @@ def arguments_from_templates(parser, templates):
 			'default': temp.default,
 			'help': temp.desc}
 
-		if type(temp.default) == type([]):
+		if isinstance(temp.default, list):
 			# multiple values
-			opts['nargs'] = '*'
 			opts['type'] = type(temp.default[0])
-		elif type(temp.default) == type(True):
-			# boolean value
-			del opts['metavar']
-			opts['action'] = 'store_true'
+			opts['nargs'] = '*'
+		elif isinstance(temp.default, bool):
+			opts['type'] = str2bool
 		else:
-			# normal argument
 			opts['type'] = type(temp.default)
 
 		parser.add_argument('--' + temp.name, **opts)
@@ -184,12 +178,14 @@ class MyArgumentParser(argparse.ArgumentParser):
 	"""
 
 	def convert_arg_line_to_args(self, arg_line):
+		"""
+		"""
+		if arg_line.startswith('#'):
+			return
 		for arg in arg_line.split():
 			if not arg.strip():
 				continue
-			print arg
 			yield arg
-		#TODO SKIP COMMENTS
 
 
 run_usage = '`%(prog)s run [SIM_OPTS][ALG_OPTS][PART_OPTS] workload_file`'
