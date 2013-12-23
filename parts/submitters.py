@@ -9,7 +9,7 @@ Submitters:
 
 Customizing:
 	Create a new subclass of `BaseSubmitter` and override the required methods.
-	To add new settings to use in your subclass see :class: `Settings` documentation.
+	To add new settings to use in your subclass see :mod: `settings` documentation.
 """
 
 
@@ -62,7 +62,7 @@ class OracleSubmitter(BaseSubmitter):
 class DefaultTimeSubmitter(BaseSubmitter):
 	"""
 	Always return a predefined valued.
-	Uses `Settings.default_limit` as that value.
+	Uses `_settings.default_limit` as that value.
 	"""
 
 	def _get_limit(self, job):

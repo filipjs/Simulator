@@ -8,7 +8,7 @@ Shares:
 
 Customizing:
 	Create a new subclass of `BaseShare` and override the required methods.
-	To add new settings to use in your subclass see :class: `Settings` documentation.
+	To add new settings to use in your subclass see :mod: `settings` documentation.
 """
 
 
@@ -61,7 +61,7 @@ class EqualShare(BaseShare):
 class CustomShare(BaseShare):
 	"""
 	Read the share values from a file.
-	Uses `Settings.share_file` to read from.
+	Uses `_settings.share_file` to read from.
 	"""
 
 	def __init__(self, *args):

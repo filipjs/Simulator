@@ -3,6 +3,7 @@
 import argparse
 import sys
 import time
+import parts.settings
 #from reader import SWFReader, ICMReader #TODO ZMIENIC IMPORT READOW NA TYLKO MODULE??
 
 
@@ -60,10 +61,12 @@ def divide_jobs(jobs, first_job, block_time, block_margin):
 
 
 def main(args):
-
+	"""
+	"""
 	print args
 	return 0
 	#TODO select reader based on extenstion
+#TODO DODAC TIME.CTIME DO TITLE! default=time.ctime(),
 	reader = SWFReader()
 	jobs, users = reader.parse_workload(args['workload'], args['serial'])
 	jobs.sort(key=lambda j: j.submit) # order by submit time
@@ -105,55 +108,84 @@ def main(args):
 			break
 
 
-def convert_arg_line_to_args(arg_line):
-	for arg in arg_line.split():
-		if not arg.strip():
-			continue
-		yield arg
+def arguments_from_templates(parser, templates):
+	"""
+	"""
+	for temp in templates:
+		assert temp.default is not None
+
+		opts = {'metavar': temp.time_unit,
+			'default': temp.default,
+			'help': temp.desc}
+
+		if type(temp.default) == type([]):
+			# multiple values
+			opts['nargs'] = '*'
+			opts['type'] = type(temp.default[0])
+		elif type(temp.default) == type(True):
+			# boolean value
+			del opts['metavar']
+			opts['action'] = 'store_true'
+		else:
+			# normal argument
+			opts['type'] = type(temp.default)
+
+		parser.add_argument('--' + temp.name, **opts)
+
+
+class MyHelpFormatter(argparse.HelpFormatter):
+	"""
+	"""
+
+	def __init__(self, prog, **kwargs):
+		kwargs['max_help_position'] = 40
+		kwargs['indent_increment'] = 4
+		kwargs['width'] = 100
+		argparse.HelpFormatter.__init__(self, prog, **kwargs)
+
+
+class MyArgumentParser(argparse.ArgumentParser):
+	"""
+	"""
+
+	def convert_arg_line_to_args(self, arg_line):
+		for arg in arg_line.split():
+			if not arg.strip():
+				continue
+			yield arg
+		#TODO SKIP COMMENTS
+
+
+desc = """Run a cluster simulation:
+    `main.py run [SIM_OPTS] [ALG_OPTS] [PART_OPTS] <workload_file>`
+To read the options from a config file:
+    `main.py run @myconfig <workload_file>`
+
+You can generate a template of the configuration:
+    `main.py config --generate <out_file>`.
+You can also recreate a config from a simulation:
+    `main.py config --simulation <sim_file> <out_file>`
+"""
 
 
 if __name__=="__main__":
-#TODO PROLOG, EPILOG
-	parser = argparse.ArgumentParser(description="Simulate a cluster from a workload file",
-					     fromfile_prefix_chars='@')
-	parser.convert_arg_line_to_args = convert_arg_line_to_args
 
-#TODO parents = [settings? parts?]
-	#formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+	#TODO PROLOG, EPILOG, USAGE
+	parser = MyArgumentParser(description=desc,
+				  formatter_class=argparse.RawDescriptionHelpFormatter)
 
-	sim_group = parser.add_argument_group('Simulation', 'General simulation parameters')
-	sim_group.add_argument('--title', default='',
-			       help="Title of the simulation")
-	sim_group.add_argument('--job_id', type=int, help="Start from the job with this ID")
-	sim_group.add_argument('--block_time', metavar="HOURS", type=int,
-			help="Divide simulation into 'block_time' long parts")
-	sim_group.add_argument('--block_margin', metavar="HOURS", type=int, default=0,
-			help="Extra simulation time to fill up the cluster")
-	sim_group.add_argument('--one_block', action='store_true',
-			help="Simulate only the first block")
-	sim_group.add_argument('--serial', action='store_true',
-			help="Change parallel jobs to serial")
-	sim_group.add_argument('--cpu_count', type=int,
-			help="Set a static number of CPUs")
-	sim_group.add_argument('--cpu_percentile', metavar='P-th', type=int,
-			help="Set the number of CPUs to the P-th percentile")
-	sim_group.add_argument('parts', help="PARTS", nargs="*")
-	sim_group.add_argument('workload', help="Workload file")
-#TODO DODAC TIME.CTIME DO TITLE! default=time.ctime(),
-	## automatically build the rest of the arguments
-	#alg_group = parser.add_argument_group('Algorithm', 'Algorithm specific parameters')
-	#for temp in Settings.templates:
-		#alg_group.add_argument('--' + temp[0], type=type(temp[2]),
-			#default=temp[2], metavar=temp[3], help=temp[1])
-##TODO ARGUMENTY DO WYBIERANIA NAZWY KLAS POSZCZEGOLNYCH CZESCI SYMULACJI
+				  #fromfile_prefix_chars='@',
+				  #formatter_class = MyHelpFormatter,
 
+	parser.add_argument('workload', help='The workload file')
 
+	sim_group = parser.add_argument_group('General simulation parameters')
+	arguments_from_templates(sim_group, parts.settings.sim_templates)
 
-	args = vars(parser.parse_args())
-	# manual check of the --cpu_xx arguments [required and exclusive]
-	#if not args['cpu_count'] and not args['cpu_percentile']:
-		#parser.error("one of the arguments --cpu_count --cpu_percentile is required")
-	#if args['cpu_count'] and args['cpu_percentile']:
-		#parser.error("argument --cpu_count not allowed with argument --cpu_percentile")
-	# run the simulation
-	main(args)
+	alg_group = parser.add_argument_group('Algorithm specific parameters')
+	arguments_from_templates(alg_group, parts.settings.alg_templates)
+
+	part_group = parser.add_argument_group('Part selection parameters')
+	arguments_from_templates(part_group, parts.settings.part_templates)
+
+	main(vars(parser.parse_args()))

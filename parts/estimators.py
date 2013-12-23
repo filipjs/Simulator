@@ -8,7 +8,7 @@ Estimators:
 
 Customizing:
 	Create a new subclass of `BaseEstimator` and override the required methods.
-	To add new settings to use in your subclass see :class: `Settings` documentation.
+	To add new settings to use in your subclass see :mod: `settings` documentation.
 """
 
 

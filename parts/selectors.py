@@ -9,7 +9,7 @@ Selectors:
 
 Customizing:
 	Create a new subclass of `BaseSelector` and override the required methods.
-	To add new settings to use in your subclass see :class: `Settings` documentation.
+	To add new settings to use in your subclass see :mod: `settings` documentation.
 """
 
 
@@ -61,7 +61,7 @@ class BaseSelector(object):
 class VirtualSelector(BaseSelector):
 	"""
 	Campaign selection based only on the virtual schedule.
-	Uses `Settings.threshold` in the calculations.
+	Uses `_settings.threshold` in the calculations.
 	"""
 
 	def _get_camp(self, job):
