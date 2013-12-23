@@ -1,11 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import argparse
+import glob
 import importlib
+import os
 import sys
 import time
 from core import parsers#, simulator
 from parts import settings
+
+
+##
+## Action ``run``.
+##
 
 
 def divide_jobs(jobs, first_job, block_time, block_margin):
@@ -28,7 +35,7 @@ def divide_jobs(jobs, first_job, block_time, block_margin):
 			if j.ID == first_job:
 				break
 		else:
-			print "ERROR: job ID", first_job, "not found"
+			print 'ERROR: job ID', first_job, 'not found'
 			sys.exit(1)
 	else:
 		i = 0
@@ -65,59 +72,67 @@ def divide_jobs(jobs, first_job, block_time, block_margin):
 	return blocks
 
 
-def load_class(module_name, class_name):
+def make_classes(name, conf, modules=[]):
 	"""
-	Load a class the the module.
+	Return an instance of the class from the ``parts`` package.
+
+	Each class must take exactly one init argument `conf`.
 	"""
-	m = importlib.import_module('parts.' + module_name)
-	c = getattr(m, class_name)
-	return c
+	if not modules:
+		package = 'parts'
+		os.chdir(package)
+		for f in glob.glob('*.py'):
+			m = importlib.import_module(package + '.' + f[:-3])
+			modules.append(m)
+		os.chdir('..')
+
+	if isinstance(name, list):
+		return [make_classes(n, conf) for n in name]
+
+	for m in modules:
+		if hasattr(m, name):
+			cl = getattr(m, name)
+			return cl(conf)  # create instance
+	else:
+		raise Exception('class not found: ' + name)
 
 
-def run(args):
+def run(workload, args):
 	"""
+	Run the simulation described in `args` on the `workload`.
+
+	Run one simulation for each supplied ``scheduler``.
 	"""
-	#TODO NA SAMYM POCZATKU PRINT ARGS, ZA MOMENT JE ZMIENIAMY??
 
 	# encapsulate different settings
-	sim_set = settings.Settings(settings.sim_templates, **args)
-	alg_set = settings.Settings(settings.alg_templates, **args)
+	sim_conf = settings.Settings(settings.sim_templates, **args)
+	alg_conf = settings.Settings(settings.alg_templates, **args)
+	part_conf = settings.Settings(settings.part_templates, **args)
 
-	# now transform parts settings
-	# load common parts
-	common_parts = ['estimator', 'submitter', 'selector', 'share']
-	for part in common_parts:
-		cl = load_class(part+'s', args[part])
-		args[part] = cl(alg_set)
-
-	# load schedulers : we will do one simulation per scheduler
-	schedulers = []
-	for cl_name in args['schedulers']:
-		cl = load_class('schedulers', cl_name)
-		schedulers.append(cl(alg_set))
-
-	# finally create parts settings
-	part_set = settings.Settings(settings.part_templates, **args)
+	# now we need to load and instantiate the classes from `part_conf`
+	for key, value in part_conf.__dict__.iteritems():
+		setattr(part_conf, key, make_classes(value, alg_conf))
 
 	# parse the workload
-	parser = parsers.get_parser(args['workload'])
+	parser = parsers.get_parser(workload)
 
-	jobs, users = parser.parse_workload(sim_set.workload, sim_set.serial)
+	jobs, users = parser.parse_workload(workload, sim_conf.serial)
 	jobs.sort(key=lambda j: j.submit)  # order by submit time
 
-	# calculate missing values
+	# calculate the missing values
 	for j in jobs:
-		j.time_time = part_set.submitter.time_limit(j)
+		j.time_time = part_conf.submitter.time_limit(j)
 
 	for u in users.itervalues():
-		u.shares = part_set.share.user_share(u)
+		u.shares = part_conf.share.user_share(u)
 
 	# divide into blocks
-	blocks = divide_jobs(jobs, sim_set.job_id, sim_set.block_time, sim_set.block_margin)
+	blocks = divide_jobs(jobs, sim_conf.job_id, sim_conf.block_time,
+			     sim_conf.block_margin)
 
-	for sched in schedulers:
+	for sched in part_conf.schedulers:
 		# set the current scheduler
-		part_set.scheduler = sched
+		part_conf.scheduler = sched
 
 		for b in blocks:
 			# block includes both ends
@@ -129,11 +144,11 @@ def run(args):
 			for j in job_slice:
 				j.reset()
 				slice_users[j.user.ID] = j.user
-			for u in slice_users.itervalue():
+			for u in slice_users.itervalues():
 				u.reset()
 			# run the simulation
 			simulator = simulator.Simulator(job_slice, users_slice,
-							cpus, alg_set, part_set)
+							cpus, alg_conf, part_conf)
 			results_slice = simulator.run()
 
 			# TODO TUTAJ SAVE RESULTS
@@ -145,28 +160,52 @@ def run(args):
 #TODO get results -> drop margins (AKA EXTRA FLAGA Z PRZODU) -> save to file
 #TODO DODAC TIME.CTIME DO FILENAME! default=time.ctime(),
 
+##
+## Action ``config``.
+##
+
 
 def config(args):
 	"""
+	Create a configuration file based on `Template` lists.
+	Generating takes default values.
+	Recreating takes values from a file with simulation results.
 	"""
-	values = {}
 	if args['generate']:
 		values = {}
 	else:
 	        from ast import literal_eval
 		with open(args['recreate']) as f:
-			values = literal_eval(f.readline())
+			line = f.readline()
+			if line[0] == '{':
+				values = literal_eval(line)
+			else:
+				print 'ERROR: no context in file:', args['recreate']
+				sys.exit(1)
+
+	def str_value(value):
+		"""
+		Change the value to a printable version.
+		"""
+		if isinstance(value, list):
+			return ' '.join(map(str, value))
+		return str(value)
 
 	def print_template(temp):
+		"""
+		Print a `Template`.
+		"""
 		value = values.get(temp.name, temp.default)
 		unit = temp.time_unit or ''
 
-		print '--{:15}{}'.format(temp.name, str(value))
-		print '# {}: (default) {} {}'.format(temp.desc, temp.default, unit)
+		print '--{:15}{}'.format(temp.name, str_value(value))
+		print '# {}: (default) {} {}'.format(
+		           temp.desc, str_value(temp.default), unit
+		       )
 		if temp.loc is not None:
-			print '# Used by `{}`'.format(temp.loc)
+			print '# Used by `{}` class.'.format(temp.loc)
 
-	print '##\n## General simulation parameters\n##\n'
+	print '\n##\n## General simulation parameters\n##\n'
 	map(print_template, settings.sim_templates)
 	print '\n##\n## Algorithm specific parameters\n##\n'
 	map(print_template, settings.alg_templates)
@@ -174,8 +213,31 @@ def config(args):
 	map(print_template, settings.part_templates)
 
 
+##
+## Argument parsing
+##
+
+
+run_opts = '[SIM_OPTS][ALG_OPTS][PART_OPTS] workload_file'
+
+global_desc = """INSTRUCTIONS
+----------------------------------------------------------------
+To run a cluster simulation:
+    `%(prog)s run {}`
+To read the options from a config file:
+    `%(prog)s run @myconfig workload_file`
+
+You can generate a template of the configuration:
+    `%(prog)s config --generate`.
+You can also recreate a config from a simulation:
+    `%(prog)s config --recreate sim_file`
+----------------------------------------------------------------
+""".format(run_opts)
+
+
 def arguments_from_templates(parser, templates):
 	"""
+	Add an argument to the parser based on the `Template`.
 	"""
 
 	def str2bool(v):
@@ -202,6 +264,7 @@ def arguments_from_templates(parser, templates):
 
 class MyHelpFormatter(argparse.HelpFormatter):
 	"""
+	`HelpFormatter` with custom graphical parameters.
 	"""
 
 	def __init__(self, prog, **kwargs):
@@ -213,10 +276,13 @@ class MyHelpFormatter(argparse.HelpFormatter):
 
 class MyArgumentParser(argparse.ArgumentParser):
 	"""
+	`ArgumentParser` with custom file parsing.
 	"""
 
 	def convert_arg_line_to_args(self, arg_line):
 		"""
+		Parse the file skipping comments and using
+		whitespace as argument delimiter.
 		"""
 		if arg_line.startswith('#'):
 			return
@@ -224,23 +290,6 @@ class MyArgumentParser(argparse.ArgumentParser):
 			if not arg.strip():
 				continue
 			yield arg
-
-
-run_usage = '`%(prog)s run [SIM_OPTS][ALG_OPTS][PART_OPTS] workload_file`'
-
-global_desc = """INSTRUCTIONS
-----------------------------------------------------------------
-To run a cluster simulation:
-    {}
-To read the options from a config file:
-    `%(prog)s run @myconfig workload_file`
-
-You can generate a template of the configuration:
-    `%(prog)s config --generate`.
-You can also recreate a config from a simulation:
-    `%(prog)s config --recreate sim_file`
-----------------------------------------------------------------
-""".format(run_usage)
 
 
 if __name__=="__main__":
@@ -251,7 +300,7 @@ if __name__=="__main__":
 
 	# run simulation parser
 	run_parser = subparsers.add_parser('run', help='Run a simulation',
-					   usage=run_usage,
+					   usage='%(prog)s {}'.format(run_opts),
 					   fromfile_prefix_chars='@',
 					   formatter_class=MyHelpFormatter)
 	run_parser.add_argument('workload', help='The workload file')
@@ -275,9 +324,10 @@ if __name__=="__main__":
 				  help='Recreate the configuration from a simulation')
 
 	args = vars(parser.parse_args())
+
 	if args['command'] == 'run':
-		run(args)
+		run(args['workload'], args)
 	elif args['command'] == 'config':
 		config(args)
 	else:
-		print "Hmm..."
+		print "Hmm...", args['command']

@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 
 """
-Module gathering all the settings from different parts of the system.
+Module gathering the settings from different parts of the system.
 
 Module attributes:
   time_units: a dictionary mapping the permitted time units to seconds.
-  sim_templates: a list of general simulation settings.
   alg_templates: a combined list of all the algorithm specific settings.
   part_templates: a list describing chosen system parts.
 
@@ -34,6 +33,7 @@ class Template(object):
 	"""
 
 	def __init__(self, name, desc, default, time_unit=None, loc=None):
+		assert default is not None
 		self.name = name
 		self.desc = desc
 		self.default = default
@@ -48,8 +48,8 @@ class Template(object):
 time_units = {'SEC': 1, 'MINS': 60, 'HOURS': 60*60, 'DAYS': 60*60*24}
 
 
+# Add your settings here.
 alg_templates = [
-	# Add your settings here.
 	Template('threshold', 'The campaign selection threshold', 10, 'MINS',
 		 loc='VirtualSelector'),
 	Template('decay', 'The half-decay period of the CPU usage', 24, 'HOURS',
@@ -60,8 +60,18 @@ alg_templates = [
 		 loc='CustomShare')
 ]
 
+# You can change the default classes here.
+part_templates = [
+	Template('estimator', 'The estimator class', 'NaiveEstimator'),
+	Template('submitter', 'The submitter class', 'OracleSubmitter'),
+	Template('selector', 'The selector class', 'VirtualSelector'),
+	Template('schedulers', 'The scheduler classes',
+		 ['OStrichScheduler', 'FairshareScheduler']),
+	Template('share', 'The share assigner class', 'EqualShare')
+]
+
 sim_templates = [
-	Template('title', 'The title of the simulation', 'No_title'),
+	Template('title', 'The title of the simulation', 'title'),
 	Template('job_id', 'Start from the job with this ID', 0),
 	Template('block_time', 'Divide the simulation in `block_time`'
 		 ' long parts', 0, 'DAYS'),
@@ -71,15 +81,6 @@ sim_templates = [
 	Template('serial', 'Change parallel jobs to serial versions', False),
 	Template('cpu_count', 'Set a static number of CPUs, takes precedence', 0),
 	Template('cpu_percent', 'Set the number of CPUs to the P-th percentile', 70),
-]
-
-part_templates = [
-	Template('estimator', 'The estimator class', 'NaiveEstimator'),
-	Template('submitter', 'The submitter class', 'OracleSubmitter'),
-	Template('selector', 'The selector class', 'VirtualSelector'),
-	Template('schedulers', 'The scheduler classes',
-		 ['OStrichScheduler', 'FairshareScheduler']),
-	Template('share', 'The share assigner class', 'EqualShare')
 ]
 
 
