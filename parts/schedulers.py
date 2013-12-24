@@ -15,7 +15,7 @@ class BaseScheduler(object):
 	"""
 	Schedulers base class. Subclasses are required to override:
 
-	1) _job_priority_key
+	1) job_priority_key
 
 	You can access the `Settings` using `self._settings`.
 	"""
@@ -29,7 +29,7 @@ class BaseScheduler(object):
 		self._settings = settings
 
 	@abstractmethod
-	def _job_priority_key(self, job):
+	def job_priority_key(self, job):
 		"""
 		``Key`` function for the ``list.sort`` method.
 		Extract a comparison key from the job for the
@@ -55,7 +55,7 @@ class OStrichScheduler(BaseScheduler):
 		"""
 		return (job.estimate, job.submit)
 
-	def _job_priority_key(self, job):
+	def job_priority_key(self, job):
 		"""
 		Priority ordering for the scheduler:
 		1) faster ending campaigns
@@ -79,7 +79,7 @@ class FairshareScheduler(BaseScheduler):
 	SLURM implementation of the Fairshare algorithm.
 	"""
 
-	def _job_priority_key(self, job):
+	def job_priority_key(self, job):
 		"""
 		Prioritize the jobs based on the owner's account service level.
 		Ties are ordered by earlier submit.

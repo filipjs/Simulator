@@ -203,7 +203,7 @@ class User(object):
 	  cpu_clock_used: total usage, already accounting the decay.
 	  active_jobs: not finished jobs (pending or running).
 	  completed_jobs: jobs that finished execution, ordered by end time.
-	  active_camps: active campaign (see `Campaign`), ordered by creation time.
+	  active_camps: active campaigns (see `Campaign`), ordered by creation time.
 	  completed_camps: completed campaigns, ordered by the virtual end time.
 
 	"""
@@ -258,6 +258,9 @@ class User(object):
 		"""
 		self._cpu_clock_used += self._occupied_cpus * value
 		self._cpu_clock_used *= real_decay
+
+	def add_job(self, job):
+		self.active_jobs.append(job)
 
 	def job_started(self, job):
 		# we need to keep track of the number of processors
