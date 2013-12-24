@@ -6,7 +6,7 @@ import importlib
 import os
 import sys
 import time
-from core import parsers#, simulator
+from core import parsers, simulator
 from parts import settings
 
 
@@ -70,6 +70,44 @@ def divide_jobs(jobs, first_job, block_time, block_margin):
 		# next block starts right after the previous one, excluding the margins
 		i = i + 1
 	return blocks
+
+
+def cpu_percentile(jobs, percent):
+	"""
+	"""
+	last_event = jobs[-1].submit
+	proc = {}
+
+	for j in jobs:
+		proc[j.submit] = proc.get(j.submit, 0) + j.proc
+		end = j.submit + j.run_time
+		if end <= last_event:
+			proc[end] = proc.get(end, 0) - j.proc
+
+	proc = sorted(proc.iteritems())
+	prev, count = proc[0][0], 0
+	counts = {}
+
+	for time, change in proc:
+		period = time - prev
+		prev = time
+		counts[count] = counts.get(count, 0) + period
+		count += change
+
+	total = sum(counts.itervalues())
+	find = int(percent/100.0 * total)
+	print total, find,
+
+	counts = sorted(counts.iteritems())
+	act = 0
+	for proc, count in counts:
+		act += count
+		if act >= find:
+			print "CPU:", proc
+			return proc
+	else:
+		print 'ERROR: Invalid percentile:', percent
+		sys.exit(1)
 
 
 def make_classes(name, conf, modules=[]):
@@ -138,13 +176,17 @@ def run(workload, args):
 			# block includes both ends
 			job_slice = jobs[b['left']:b['right']+1]
 			# calculate the CPU number
-			cpus = args['cpus'] # TODO
-			# reset entities
+			if sim_conf.cpu_count:
+				cpus = sim_conf.cpu_count
+			else:
+				cpus = cpu_percentile(job_slice, sim_conf.cpu_percent)
+			continue
+			# reset the entities
 			users_slice = {}
 			for j in job_slice:
 				j.reset()
-				slice_users[j.user.ID] = j.user
-			for u in slice_users.itervalues():
+				users_slice[j.user.ID] = j.user
+			for u in users_slice.itervalues():
 				u.reset()
 			# run the simulation
 			simulator = simulator.Simulator(job_slice, users_slice,
@@ -152,7 +194,8 @@ def run(workload, args):
 			results_slice = simulator.run()
 
 			# TODO TUTAJ SAVE RESULTS
-			if sim_args.one_block:
+
+			if sim_conf.one_block:
 				break
 
 #first_sub = jobs[b['first']].submit

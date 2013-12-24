@@ -85,7 +85,7 @@ class Simulator(object):
 		  settings: algorithmic settings
 		  parts: *instances* of all the system parts
 		"""
-		assert jobs and users and cpus
+		assert jobs and users and (cpus > 0)
 		self._cpu_limit = cpus
 		self._cpu_used = 0
 		self._future_jobs = jobs
@@ -177,7 +177,7 @@ class Simulator(object):
 #TODO NIE TRZEBA TEGO ZAPAMIETYWAC TYLKO NA KONCU WYPISAC
 #TODO TAK SAMO WYPISAC JAKIES STATY DLA USEROW NA KONCU
 #TODO WYPISAC == DODAC DO RESULTS
-		return self.results
+		return self._results
 
 	def _share_value(self, user):
 		"""
