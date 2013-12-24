@@ -59,7 +59,7 @@ class PriorityQueue(object):
 		Check if the queue is empty.
 		"""
 		self._pop_removed()
-		return bool(self._pq)
+		return not self._pq
 
 	def _pop_removed(self):
 		"""
@@ -177,13 +177,19 @@ class Simulator(object):
 #TODO NIE TRZEBA TEGO ZAPAMIETYWAC TYLKO NA KONCU WYPISAC
 #TODO TAK SAMO WYPISAC JAKIES STATY DLA USEROW NA KONCU
 #TODO WYPISAC == DODAC DO RESULTS
+#TODO CHECK CORRECNESS AKA
+#USER -> assert not self.active_jobs
+#USER -> assert not self.active_camps
+
+#TODO POOPISYWAC ASSERTY WSZEDZIE
+
 		return self._results
 
 	def _share_value(self, user):
 		"""
 		Calculate the user share of the available resources.
 		"""
-		share = float(u.shares) / self._active_shares
+		share = float(user.shares) / self._active_shares
 		# this will guarantee that the campaigns will eventually end
 		cpus = max(self._cpu_used, 1)
 		return share * cpus
@@ -272,6 +278,7 @@ class Simulator(object):
 		Add the job to a campaign and do a scheduling pass.
 		Update the owner activity status.
 		"""
+		assert job.proc <= self._cpu_limit
 		if not job.user.active:
 			# user will be active after this job submission
 			self._active_shares += job.user.shares

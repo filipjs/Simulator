@@ -3,18 +3,31 @@
 
 class ReadOnlyAttr(object):
 	"""
-	A data descriptor that permits only a maximum of
-	one setter invocation (from None to value).
+	A data descriptor that permits only one setter invocation
+	on an unassigned attribute.
+
+	Note:
+	  Using this descriptor disables holding the value `None`.
 	"""
-	def __init__(self, value=None):
-		self._val = value
+	def __init__(self):
+		self._data = {}
 
 	def __get__(self, obj, objtype):
-		return self._val
-	def __set__(self, obj, val):
-		if self._val is not None:
-			raise AttributeError("read-only attribute")
-		self._val = val
+		assert obj is not None, 'only usable at the instance level'
+		if obj not in self._data:
+			raise AttributeError('access before assignment')
+		return self._data[obj]
+
+	def __set__(self, obj, value):
+		"""
+		Setting the value to `None` unassigns the attribute.
+		"""
+		if value is None:
+			self._data.pop(obj, None)
+		elif obj in self._data:
+			raise AttributeError('assignment to a read-only attribute')
+		else:
+			self._data[obj] = value
 
 
 class Job(object):
@@ -41,6 +54,10 @@ class Job(object):
 	  3) start execution
 	  4) execution ended
 	"""
+
+	time_limit = ReadOnlyAttr()
+	camp = ReadOnlyAttr()
+
 	def __init__(self, stats, user):
 		"""
 		Required entries in stats:
@@ -48,11 +65,10 @@ class Job(object):
 		"""
 		self._stats = stats
 		self._user = user
-		self.time_limit = ReadOnlyAttr()
 
 	def reset(self):
-		self._camp = ReadOnlyAttr()
-		self._start = ReadOnlyAttr()
+		self.camp = None
+		self._start = None
 		self._completed = False
 		self.estimate = None
 
@@ -78,10 +94,12 @@ class Job(object):
 
 	@property
 	def start_time(self):
+		assert self.started, 'job not started'
 		return self._start
 
 	@property
 	def end_time(self):
+		assert self.completed, 'job not completed'
 		return self.start_time + self.run_time
 
 	@property
@@ -93,25 +111,20 @@ class Job(object):
 		return self._completed
 
 	def start_execution(self, t):
+		assert not self.started, 'job already started'
+		assert not self.completed, 'job already completed'
 		self._start = t
 		# notify further
-		self._camp.job_started(self)
-		self._user.job_started(self)
+		self.camp.job_started(self)
+		self.user.job_started(self)
 
 	def execution_ended(self, t):
-		assert not self._completed
-		assert self.end_time == t
+		assert not self.completed, 'job already completed'
+		assert self.start_time + self.run_time == t, 'invalid run time'
 		self._completed = True
 		# notify further
-		self._camp.job_ended(self)
-		self._user.job_ended(self)
-
-	def __str__(self):
-		return '{} {} {} {} {} {} {} {} {}'.format(
-			self.ID, self.user.ID, self.camp.ID,
-			self.proc, self.submit, self.start_time,
-			self.run_time, self.time_limit, self.estimate
-		)
+		self.camp.job_ended(self)
+		self.user.job_ended(self)
 
 
 class Campaign(object):
@@ -207,14 +220,14 @@ class User(object):
 	  completed_camps: completed campaigns, ordered by the virtual end time.
 
 	"""
+
+	shares = ReadOnlyAttr()
+
 	def __init__(self, uid):
 		self._id = uid
 		self._global_count = 0
-		self.shares = ReadOnlyAttr()
 
 	def reset(self):
-		assert not self.active_jobs
-		assert not self.active_camps
 		self._lost_virtual = 0
 		self._cpu_clock_used = 0
 		self._occupied_cpus = 0

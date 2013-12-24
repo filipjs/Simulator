@@ -72,11 +72,16 @@ def divide_jobs(jobs, first_job, block_time, block_margin):
 	return blocks
 
 
-def cpu_percentile(jobs, percent):
+def cpu_percentile(jobs, percentile):
 	"""
+	Return the number of CPUs equal to the p-th `percentile`
+	of the system utilization over the simulation period.
+
+	Note:
+	  We are assuming that the system has no CPU limit.
 	"""
 	last_event = jobs[-1].submit
-	proc = {}
+	proc = {}  # pairs <time, change in the number of CPUs>
 
 	for j in jobs:
 		proc[j.submit] = proc.get(j.submit, 0) + j.proc
@@ -86,7 +91,7 @@ def cpu_percentile(jobs, percent):
 
 	proc = sorted(proc.iteritems())
 	prev, count = proc[0][0], 0
-	counts = {}
+	counts = {}  # pairs <number of CPUs, total period with that CPU count>
 
 	for time, change in proc:
 		period = time - prev
@@ -94,19 +99,18 @@ def cpu_percentile(jobs, percent):
 		counts[count] = counts.get(count, 0) + period
 		count += change
 
-	total = sum(counts.itervalues())
-	find = int(percent/100.0 * total)
-	print total, find,
+	total = sum(counts.itervalues())  # simulation period
+	find = int(percentile / 100.0 * total)
 
+	# sort the simulation period and find the percentile
 	counts = sorted(counts.iteritems())
 	act = 0
 	for proc, count in counts:
 		act += count
 		if act >= find:
-			print "CPU:", proc
 			return proc
 	else:
-		print 'ERROR: Invalid percentile:', percent
+		print 'ERROR: Invalid percentile:', percentile
 		sys.exit(1)
 
 
@@ -159,8 +163,7 @@ def run(workload, args):
 
 	# calculate the missing values
 	for j in jobs:
-		j.time_time = part_conf.submitter.time_limit(j)
-
+		j.time_limit = part_conf.submitter.time_limit(j)
 	for u in users.itervalues():
 		u.shares = part_conf.share.user_share(u)
 
@@ -180,7 +183,6 @@ def run(workload, args):
 				cpus = sim_conf.cpu_count
 			else:
 				cpus = cpu_percentile(job_slice, sim_conf.cpu_percent)
-			continue
 			# reset the entities
 			users_slice = {}
 			for j in job_slice:
@@ -189,9 +191,9 @@ def run(workload, args):
 			for u in users_slice.itervalues():
 				u.reset()
 			# run the simulation
-			simulator = simulator.Simulator(job_slice, users_slice,
-							cpus, alg_conf, part_conf)
-			results_slice = simulator.run()
+			my_simulator = simulator.Simulator(job_slice, users_slice,
+							   cpus, alg_conf, part_conf)
+			results_slice = my_simulator.run()
 
 			# TODO TUTAJ SAVE RESULTS
 
