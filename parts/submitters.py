@@ -36,7 +36,8 @@ class BaseSubmitter(object):
 		Run and check the correctness of `_get_limit`.
 		"""
 		limit = self._get_limit(job)
-		assert limit >= job.run_time
+		assert job.time_limit is None, 'time limit already set'
+		assert limit >= job.run_time, 'invalid time limit'
 		return limit
 
 	@abstractmethod

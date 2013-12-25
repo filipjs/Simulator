@@ -6,28 +6,22 @@ class ReadOnlyAttr(object):
 	A data descriptor that permits only one setter invocation
 	on an unassigned attribute.
 
-	Note:
-	  Using this descriptor disables holding the value `None`.
+	Setting a value `None` changes the state back to unassigned.
 	"""
 	def __init__(self):
 		self._data = {}
 
 	def __get__(self, obj, objtype):
 		assert obj is not None, 'only usable at the instance level'
-		if obj not in self._data:
-			raise AttributeError('access before assignment')
-		return self._data[obj]
+		return self._data.get(obj, None)
 
 	def __set__(self, obj, value):
-		"""
-		Setting the value to `None` unassigns the attribute.
-		"""
-		if value is None:
-			self._data.pop(obj, None)
-		elif obj in self._data:
-			raise AttributeError('assignment to a read-only attribute')
-		else:
+		if value is None or obj not in self._data:
 			self._data[obj] = value
+		elif self._data[obj] is None:
+			self._data[obj] = value
+		else:
+			raise AttributeError('assignment to a read-only attribute')
 
 
 class Job(object):

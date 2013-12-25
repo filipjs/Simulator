@@ -37,8 +37,12 @@ class BaseSelector(object):
 		"""
 		camp = self._get_camp(job)
 		if camp is not None:
-			assert not camp.active_jobs.count(job)
-			assert job.user.active_camps.count(camp)
+			assert job.camp is None, \
+			  'job already in some campaign'
+			assert not camp.active_jobs.count(job), \
+			  'job already in the campaign'
+			assert job.user.active_camps.count(camp), \
+			  'not an active campaign'
 		return camp
 
 	@abstractmethod

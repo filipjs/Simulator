@@ -81,34 +81,34 @@ def cpu_percentile(jobs, percentile):
 	  We are assuming that the system has no CPU limit.
 	"""
 	last_event = jobs[-1].submit
-	proc = {}  # pairs <time, change in the number of CPUs>
+	events = {}  # pairs <time, change in the number of CPUs>
 
 	for j in jobs:
-		proc[j.submit] = proc.get(j.submit, 0) + j.proc
+		events[j.submit] = events.get(j.submit, 0) + j.proc
 		end = j.submit + j.run_time
 		if end <= last_event:
-			proc[end] = proc.get(end, 0) - j.proc
+			events[end] = events.get(end, 0) - j.proc
 
-	proc = sorted(proc.iteritems())
-	prev, count = proc[0][0], 0
-	counts = {}  # pairs <number of CPUs, total period with that CPU count>
+	events = sorted(events.iteritems())
+	prev_event, cpus = events[0][0], 0
+	util = {}  # pairs <number of CPUs, total period with that CPU count>
 
-	for time, change in proc:
-		period = time - prev
-		prev = time
-		counts[count] = counts.get(count, 0) + period
-		count += change
+	for time, change in events:
+		period = time - prev_event
+		prev_event = time
+		util[cpus] = util.get(cpus, 0) + period
+		cpus += change
 
-	total = sum(counts.itervalues())  # simulation period
+	total = sum(util.itervalues())  # total simulation period
 	find = int(percentile / 100.0 * total)
 
-	# sort the simulation period and find the percentile
-	counts = sorted(counts.iteritems())
-	act = 0
-	for proc, count in counts:
-		act += count
-		if act >= find:
-			return proc
+	# sort by utilization and find the percentile
+	util = sorted(util.iteritems())
+	elements = 0
+	for cpus, period in util:
+		elements += period
+		if elements >= find:
+			return cpus
 	else:
 		print 'ERROR: Invalid percentile:', percentile
 		sys.exit(1)
@@ -116,9 +116,14 @@ def cpu_percentile(jobs, percentile):
 
 def make_classes(name, conf, modules=[]):
 	"""
-	Return an instance of the class from the ``parts`` package.
+	Return an instance of the class `name` from the ``parts`` package.
+	Each class must take *exactly one* init argument `conf`.
 
-	Each class must take exactly one init argument `conf`.
+	Args:
+	  name: name of the class OR a list of names.
+	  conf: argument passed to the class constructor.
+	  modules: a cache with loaded modules from the `parts` package.
+
 	"""
 	if not modules:
 		package = 'parts'
@@ -152,7 +157,7 @@ def run(workload, args):
 	part_conf = settings.Settings(settings.part_templates, **args)
 
 	# now we need to load and instantiate the classes from `part_conf`
-	for key, value in part_conf.__dict__.iteritems():
+	for key, value in part_conf.__dict__.items():
 		setattr(part_conf, key, make_classes(value, alg_conf))
 
 	# parse the workload
@@ -212,7 +217,7 @@ def run(workload, args):
 
 def config(args):
 	"""
-	Create a configuration file based on `Template` lists.
+	Create a configuration file based on the `Template` lists.
 	Generating takes default values.
 	Recreating takes values from a file with the simulation results.
 	"""
@@ -281,14 +286,16 @@ You can also recreate a config from a simulation:
 
 def arguments_from_templates(parser, templates):
 	"""
-	Add an argument to the parser based on the `Template`.
+	Add arguments to the parser based on the `Template` list.
 	"""
 
 	def str2bool(v):
+		if v.lower() not in ['true', 'false']:
+			print 'WARNING: not a boolean value, setting to False'
 		return v.lower() == 'true'
 
 	for temp in templates:
-		assert temp.default is not None
+		assert temp.default is not None, 'invalid default value'
 
 		opts = {'metavar': temp.time_unit,
 			'default': temp.default,
@@ -325,8 +332,8 @@ class MyArgumentParser(argparse.ArgumentParser):
 
 	def convert_arg_line_to_args(self, arg_line):
 		"""
-		Parse the file skipping comments and using
-		any whitespace as argument delimiter.
+		Parse the file skipping the comments and using
+		any whitespace as an argument delimiter.
 		"""
 		if arg_line.startswith('#'):
 			return

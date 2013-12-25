@@ -94,7 +94,7 @@ class SWFParser(BaseParser):
 
 	def _parse(self, line):
 		if line[0] == ';':
-			return  # skip comments
+			return None  # skip comments
 		stats = map(int, line.split())
 		return {
 			'id': stats[self.job_id],

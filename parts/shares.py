@@ -35,7 +35,8 @@ class BaseShare(object):
 		Run and check the correctness of `_get_share`.
 		"""
 		share = self._get_share(user)
-		assert share > 0
+		assert user.shares is None, 'share value already set'
+		assert share > 0, 'invalid share value'
 		return share
 
 	@abstractmethod

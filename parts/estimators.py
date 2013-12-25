@@ -36,8 +36,8 @@ class BaseEstimator(object):
 		Run and check the correctness of `_get_initial`.
 		"""
 		est = self._get_initial(job)
-		assert job.estimate is None
-		assert est > 0
+		assert job.estimate is None, 'estimate already set'
+		assert est > 0, 'invalid estimate'
 		return est
 
 	def next_estimate(self, job):
@@ -47,8 +47,8 @@ class BaseEstimator(object):
 		"""
 		prev = job.estimate
 		est = self._get_next(job, prev)
-		assert job.estimate == prev
-		assert est > prev
+		assert job.estimate == prev, 'estimate was changed'
+		assert est > prev, 'invalid estimate'
 		return est
 
 	@abstractmethod

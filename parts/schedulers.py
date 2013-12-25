@@ -48,7 +48,7 @@ class OStrichScheduler(BaseScheduler):
 
 	def _job_camp_index(self, job):
 		"""
-		This assumes that the compared jobs are from
+		This assumes that the compared jobs will be from
 		the same campaign.
 		Inside campaigns order by shorter run time estimate.
 		In case of ties order by earlier submit.
