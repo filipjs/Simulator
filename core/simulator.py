@@ -267,8 +267,17 @@ class Simulator(object):
 					job
 				)
 			else:
-				# only top priority can be scheduled
+				# only the top priority job can be scheduled
 				break
+#TODO DODAC CLASSE CLUSTER
+# CLUSTER->CAN_RUN
+# CLUSTER->ADD_RESERVATIONS
+# CLUSTER->CLEAR_RESERCATIONS
+# CLUSTER->RUN JOB
+# CLUSTER->JOB FINISHED??
+# CLUSTER == lista CPUS Z (start+time_limit, job)
+# I SORTOWAC PO END TIMACH ZEBY WIEDZIEC KIEDY SIE CPU ZWOLNIA
+# CLUSTER->TEST_JOB_RUNNABLE -> czy free_cpu <= job.prc LUB max(node.free) <= job.proc
 
 		#TODO backfilling
 		# if still left free and not empty waiting -> self._backfill()
