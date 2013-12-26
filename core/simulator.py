@@ -7,10 +7,10 @@ import math
 class Events(object):
 	"""
 	The values of the events are **VERY IMPORTANT**.
-	They are used in a priority queue to break ties.
+	Changing them will break the code.
 	"""
-	new_job = 1
-	job_end = 2
+	job_end = 1
+	new_job = 2
 	estimate_end = 3
 	campaign_end = 4
 	force_decay = 5
@@ -85,7 +85,7 @@ class Simulator(object):
 		  settings: algorithmic settings
 		  parts: *instances* of all the system parts
 		"""
-		assert jobs and users and (cpus > 0)
+		assert jobs and users and (cpus > 0), 'invalid arguments'
 		self._cpu_limit = cpus
 		self._cpu_used = 0
 		self._future_jobs = jobs
@@ -245,7 +245,9 @@ class Simulator(object):
 		"""
 		#sort the jobs using the defined ordering
 		self._waiting_jobs.sort(
-			key=self._parts.scheduler.job_priority_key)
+			key=self._parts.scheduler.job_priority_key,
+			reverse=True
+		)
 
 		while self._waiting_jobs:
 			free = self._cpu_limit - self._cpu_used

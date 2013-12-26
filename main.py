@@ -291,7 +291,8 @@ def arguments_from_templates(parser, templates):
 
 	def str2bool(v):
 		if v.lower() not in ['true', 'false']:
-			print 'WARNING: not a boolean value, setting to False'
+			print 'WARNING: not a boolean value:', v
+			print 'Setting the value to False'
 		return v.lower() == 'true'
 
 	for temp in templates:
