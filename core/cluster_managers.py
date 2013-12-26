@@ -29,6 +29,14 @@ class BaseClusterManager(object):
 
 	__metaclass__ = ABCMeta
 
+
+	def __init__(self):
+		self._cpu_used = 0
+
+	@property
+	def cpu_used(self):
+		return self._cpu_used
+
 	@abstractmethod
 	def runnable_test(self, job):
 		"""
@@ -57,11 +65,10 @@ class SingletonNodes(BaseClusterManager):
 	"""
 
 	def __init__(self, count):
+		BaseClusterManager.__init__(self)
 		self._cpu_limit = count
-		self._node_space = [_NodeSpace(0, float('inf'), count, None)]
-		self._first_space = 0
-		self._space_count = 1
-		self._reservations = []
+		self._space_list = _NodeSpace(0, float('inf'), count, None)
+		self._space_list.reserved = 0
 
 	def runnable_test(self, job):
 		"""
@@ -72,41 +79,41 @@ class SingletonNodes(BaseClusterManager):
 	def try_schedule(self, job, now, bf_window):
 
 		total_time = 0
-		first = it = self._first_space
-#TODO W END JOB ROBIC ZWIJANIE SPACES
-#TODO AKA JEST SPACE END == JOB.END LUB JESLI NEXT SPACE.NODES == THIS.SPACE.NODES
+		first = it = self._space_list
 
-		self._node_space[it].begin = now  # advance the first window
-		assert self._node_space[it].size > 0, 'some finished job not removed'
+		it.begin = now  # advance the first window
+		assert it.size > 0, 'some finished job not removed'
 
 		while True:
-			space = self._node_space[it]
-
-			if space.nodes >= job.proc:
-				total_time += space.size
+			if it.nodes >= job.proc:
+				total_time += it.size
 				if total_time >= job.time_limit:
+					last = it
 					break
 			else:
 				total_time = 0
-				first = space.next
+				first = it.next
 			# next
-			it = space.next
+			it = it.next
 
-		if self._node_space[first].begin > now + bf_window:
+		# check if the job can be executed
+		can_run = (first == self._space_list)
+
+		if first.begin > now + bf_window:
 			# reservation outside the backfilling window
-			return False
-
-		last = it
-		it = first
+			assert not can_run, 'invalid bf_window'
+			return can_run
 
 		# At this point, we know that the job spans the spaces from
 		# `first` to `last`. However the `last` one might need to be split.
 		# Start by updating the available nodes in all but the last space.
+		it = first
 		while it != last:
-			self._node_space[it].nodes -= job.proc
-			it = self._node_space[it].next
+			it.nodes -= job.proc
+			if not can_run:
+				it.reserved += job.proc
+			it = it.next
 
-		last_space = self._node_space[last]
 		extra_time = total_time - job.time_limit
 
 		if extra_time > 0:
@@ -118,21 +125,46 @@ class SingletonNodes(BaseClusterManager):
 				last_space.proc,
 				last_space.next
 			)
-			self._node_space.append(new_space)
-			self._space_count += 1
-
 			last_space.end = new_space.begin
-			last_space.nodes -= job.proc
-			last_space.next = self._space_count
-		else:
-			# perfect fit, no need to split
-			last_space -= job.proc
+			last_space.next = new_space
 
-		if first == self._first_space:
-			# we can execute the job right away
+		last_space.nodes -= job.proc
+		if not can_run:
+			last_space.reserved += job.proc
+
+		if can_run:
 			job.start_execution(now)
-			return True
-		else:
-			# add to reservations
-			self._reservations.append(job)
-			return False
+			self._cpu_used += job.proc
+		return can_run
+
+	def clear_reservations(self):
+		"""
+
+		"""
+		it = self._space_list
+		while it is not None:
+			it.nodes += it.reserved
+			it.reserved = 0
+#TODO GDZIES ASSERTY ZE NIE MA NIC RESERVED!!
+#TODO PRZED KAZDA FUNKCJA TRZEBA ROBIC ZWIJANIE AKA FIRST.BEGIN = NOW
+#TODO I TERAZ MOZE SIE ZDAZYC ZE SIZE < 0 ALE TYLKO JESLI FIRST.NODES == NEXT.NODES??
+#TODO AKA PRACA SKONCZYLA SIE PRZED TIME LIMIT??
+
+#TODO ZROBIC MERGE SPACE JESLI NODES == NODES??
+#TODO I WTEDY W JOB.END POTRZEBA 'UNMERGE'
+
+	def job_ended(self, job, now):
+		"""
+
+		"""
+		job.execution_ended(now)
+		self._cpu_used -= job.proc
+		# Node spaces are built based on `job.time_limit`,
+		# but the actual `job.run_time` can be shorter.
+
+		it = self._space_list
+		while True:
+			if it.end > job.start_time + job.time_limit:
+				break
+			it.nodes += job.proc
+			it = it.next

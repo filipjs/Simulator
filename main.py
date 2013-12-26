@@ -345,7 +345,7 @@ class MyArgumentParser(argparse.ArgumentParser):
 
 
 if __name__=="__main__":
-
+#TODO SPRAWDZIC CZY ARGS MOGA BYC UJEMNE, I DODAC CUSTOM ACTION CZY COS DLA UJEMNYCH??
 	parser = MyArgumentParser(description=global_desc,
 				  formatter_class=argparse.RawDescriptionHelpFormatter)
 	subparsers = parser.add_subparsers(dest='command', help='Select a command')

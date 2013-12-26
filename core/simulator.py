@@ -85,7 +85,7 @@ class Simulator(object):
 		  settings: algorithmic settings
 		  parts: *instances* of all the system parts
 		"""
-		assert jobs and users and (cpus > 0), 'invalid arguments'
+		assert jobs and users and cpus, 'invalid arguments'
 		self._cpu_limit = cpus
 		self._cpu_used = 0
 		self._future_jobs = jobs
@@ -243,7 +243,7 @@ class Simulator(object):
 		Try to execute the highest priority jobs from
 		the `_waiting_jobs` list.
 		"""
-		#sort the jobs using the defined ordering
+		#sort the jobs using the ordering defined by the scheduler
 		self._waiting_jobs.sort(
 			key=self._parts.scheduler.job_priority_key,
 			reverse=True
@@ -251,9 +251,9 @@ class Simulator(object):
 
 		while self._waiting_jobs:
 			free = self._cpu_limit - self._cpu_used
-			if self._waiting_jobs[0].proc <= free:
+			if self._waiting_jobs[-1].proc <= free:
 				# execute the job
-				job = self._waiting_jobs.pop(0)
+				job = self._waiting_jobs.pop()
 				self._running_jobs.append(job)
 				job.start_execution(self._now)
 				self._cpu_used += job.proc
@@ -311,7 +311,7 @@ class Simulator(object):
 		"""
 		Free the resources and do a scheduling pass.
 		"""
-		job.execution_ended(self._now)
+		job.execution_ended(self._now) #TODO MANAGER->JOB_ENDED
 		# The job predicted run time could be higher than the
 		# real run time, so we need to redistribute any extra
 		# virtual time created by the mentioned difference.
@@ -319,7 +319,7 @@ class Simulator(object):
 
 		# remove the job from the processors
 		self._running_jobs.remove(job)
-		self._cpu_used -= job.proc
+		self._cpu_used -= job.proc #TODO TO JUZ W MANAGER
 		self._schedule()
 
 	def _estimate_end_event(self, job):
