@@ -11,10 +11,11 @@ class _NodeSpace(object):
 
 	"""
 
-	def __init__(self, begin, end, nodes, next):
+	def __init__(self, begin, end, nodes, reserved, next):
 		self.begin = begin
 		self.end = end
 		self.nodes = nodes
+		self.reserved = reserved
 		self.next = next
 
 	@property
@@ -22,13 +23,43 @@ class _NodeSpace(object):
 		return self.end - self.begin
 
 
-class BaseClusterManager(object):
+class _BaseNodeBitmap(object):
 	"""
 
 	"""
 
 	__metaclass__ = ABCMeta
 
+	def __init__(self, another=None):
+		if another is None:
+			self._new_bitmap()
+		else:
+			self._copy_bitmap(another)
+
+	@abstractmethod
+	def _new_bitmap(self):
+		pass
+	@abstractmethod
+	def _copy_bitmap(self, another):
+		pass
+	@abstractmethod
+	def add_bitmap(self, another):
+		pass
+	@abstractmethod
+	def remove_bitmap(self, another):
+		pass
+	@abstractmethod
+	def add_reserved(self, another):
+		pass
+	@abstractmethod
+	def remove_reserved(self, another):
+		pass
+
+
+class ClusterManager(object):
+	"""
+
+	"""
 
 	def __init__(self):
 		self._cpu_used = 0
