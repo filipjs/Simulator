@@ -4,6 +4,16 @@ import itertools
 import math
 
 
+DEBUG_FLAG = __debug__
+
+def debug_print(*args):
+	"""
+	Print the arguments if the `DEBUG_FLAG` is on.
+	"""
+	if DEBUG_FLAG:
+		print ' '.join(map(str, args))
+
+
 class Events(object):
 	"""
 	The values of the events are **VERY IMPORTANT**.
@@ -138,8 +148,8 @@ class Simulator(object):
 		schedule = False
 
 		while sub_iter < sub_total or not self._pq.empty():
-			# We only need to keep two `new_job` events
-			# in the queue at the same time.
+			# We only need to keep two `new_job` events in the
+			# queue at the same time (one to process, one to peek).
 			while sub_iter < sub_total and sub_count < 2:
 				self._pq.add(
 					self._future_jobs[sub_iter].submit,
@@ -363,7 +373,6 @@ class Simulator(object):
 		"""
 		Free the resources.
 		"""
-		assert job.estimate >= job.run_time, 'invalid estimate'
 		job.execution_ended(self._now)
 		self._manager.job_ended(job)
 		self._cpu_used -= job.proc
@@ -372,6 +381,11 @@ class Simulator(object):
 		"""
 		Get a new estimate for the job.
 		"""
+		if job.completed:
+			# We aren't removing the `estimate_end` events
+			# when the job ends, so there might be leftovers.
+			assert job.estimate >= job.run_time, 'invalid estimate'
+			return
 		assert job.estimate < job.run_time, 'invalid estimate'
 		camp, user = job.camp, job.user
 
@@ -394,6 +408,12 @@ class Simulator(object):
 		old_est = job.estimate
 		job.estimate = self._parts.estimator.next_estimate(job)
 		camp.job_new_estimate(job, old_est)
+		# add the next event
+		self._pq.add(
+			job.start_time + job.estimate,
+			Events.estimate_end,
+			job
+		)
 
 	def _camp_end_event(self, camp):
 		"""
@@ -411,7 +431,7 @@ class Simulator(object):
 			return
 
 		while user.active_camps and not user.active_camps[0].time_left:
-			# remove all of the campaigns that ends now in one go
+			# remove all of the campaigns that end now in one go
 			ended = user.active_camps.pop(0)
 			user.completed_camps.append(ended)
 
@@ -419,3 +439,5 @@ class Simulator(object):
 			# user became inactive
 			user.last_active = self._now
 			self._active_shares -= user.shares
+		#TODO JESLI ZA WOLNO DZIALA, TUTAJ MOZNA RECZNIE DODAWAC POJEDYNCZA KAMPANIE
+		#TODO JESLI USER JEST DALEJ ACTIVE : ZMIANA SHARES -> PRZELICZYC ALL
