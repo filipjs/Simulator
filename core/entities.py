@@ -223,6 +223,9 @@ class User(object):
 
 	def reset(self):
 		self._lost_virtual = 0
+		self._virt_pool = 0
+		self.last_active = None
+		self.false_inactivity = 0
 		self._cpu_clock_used = 0
 		self._occupied_cpus = 0
 		self.active_jobs = []
@@ -242,12 +245,20 @@ class User(object):
 	def cpu_clock_used(self):
 		return round(self._cpu_clock_used, 3)
 
-	def virtual_work(self, value):
+	def set_virtual(self, value):
 		"""
-		Process the `value` long period in the virtual schedule.
+		Set the `value` long period as the virtual pool,
+		which will be processed in next `virtual_work` call.
+		"""
+		assert not self._virt_pool, 'virtual pool not redistributed'
+		self._virt_pool = value
+
+	def virtual_work(self):
+		"""
+		Redistribute the accumulated virtual pool.
 		"""
 		total = reduce(lambda x, y: x + y._virtual,
-			       self.active_camps, value)
+			       self.active_camps, self._virt_pool)
 		offset = 0
 		for camp in self.active_camps:
 			virt = min(camp.workload, total)
@@ -256,6 +267,7 @@ class User(object):
 			camp._offset = offset
 			offset += camp.time_left
 		# overflow from total is lost
+		self._virt_pool = 0
 		self._lost_virtual += total
 
 	def real_work(self, value, real_decay):
@@ -278,6 +290,11 @@ class User(object):
 		self._occupied_cpus -= job.proc
 		self.active_jobs.remove(job)
 		self.completed_jobs.append(job)
+		# The job predicted run time could be higher than the
+		# real run time, so we need redistribute the difference.
+		diff = (job.estimate - job.run_time) * job.proc
+		job.camp._virtual -= diff
+		self._virt_pool += diff
 
 	def create_campaign(self, time):
 		new_camp = Campaign(self._global_count, self, time)

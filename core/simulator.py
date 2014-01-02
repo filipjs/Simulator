@@ -9,8 +9,8 @@ class Events(object):
 	The values of the events are **VERY IMPORTANT**.
 	Changing them will break the code.
 	"""
-	job_end = 1
-	new_job = 2
+	new_job = 1
+	job_end = 2
 	estimate_end = 3
 	campaign_end = 4
 	force_decay = 5
@@ -45,7 +45,7 @@ class PriorityQueue(object):
 	def pop(self):
 		"""
 		Remove and return the next upcoming event.
-		Raise KeyError if queue is empty.
+		Raise KeyError if the queue is empty.
 		"""
 		if not self.empty():
 			time, event, _, entity = heapq.heappop(self._pq)
@@ -53,6 +53,16 @@ class PriorityQueue(object):
 			del self._entries[key]
 			return time, event, entity
 		raise KeyError('pop from an empty priority queue')
+
+	def peek(self):
+		"""
+		Peek at the next upcoming event.
+		Raise KeyError if the queue is empty.
+		"""
+		if not self.empty():
+			time, event, _, entity = self._pq[0]
+			return time, event, entity
+		raise KeyError('peek from an empty priority queue')
 
 	def empty(self):
 		"""
@@ -76,7 +86,7 @@ class Simulator(object):
 	virtual campaigns and effective CPU usage.
 	"""
 
-	def __init__(self, jobs, users, cpus, settings, parts):
+	def __init__(self, jobs, users, cpus, cpus_per_node, settings, parts):
 		"""
 		Args:
 		  jobs: a list of submitted `Jobs`.
@@ -86,15 +96,20 @@ class Simulator(object):
 		  parts: *instances* of all the system parts
 		"""
 		assert jobs and users and cpus, 'invalid arguments'
-		self._cpu_limit = cpus
-		self._cpu_used = 0
 		self._future_jobs = jobs
-		self._running_jobs = []
 		self._waiting_jobs = []
 		self._users = users
-		self._active_shares = 0
 		self._settings = settings
 		self._parts = parts
+		self._active_shares = 0
+		self._cpu_used = 0
+		self._cpu_limit = cpus
+		self._total_usage = 0
+		# create an appropriate cluster manager
+		if not cpus_per_node:
+			self._manager = 'a'(cpus)#TODO
+		else:
+			self._manager = 'b'(cpus, cpus_per_node)
 
 	def run(self):
 		"""
@@ -115,36 +130,51 @@ class Simulator(object):
 		self._decay_factor = 1 - (0.693 / self._settings.decay)
 		self._force_period = 60
 
-		count = 0
-		submits = len(self._future_jobs)
+		sub_iter = 0
+		sub_total = len(self._future_jobs)
+		sub_count = 0
 
-		while count < submits or not self._pq.empty():
-			# no need to add more than one event of this type
-			if count < submits:
+		second_stage = False
+		schedule = False
+
+		while sub_iter < sub_total or not self._pq.empty():
+			# We only need to keep two `new_job` events
+			# in the queue at the same time.
+			while sub_iter < sub_total and sub_count < 2:
 				self._pq.add(
-					self._future_jobs[count].submit,
+					self._future_jobs[sub_iter].submit,
 					Events.new_job,
-					self._future_jobs[count]
+					self._future_jobs[sub_iter]
 				)
-				count += 1
+				sub_iter += 1
+				sub_count += 1
 			# the queue cannot be empty here
 			self._now, event, entity = self._pq.pop()
 
-			# process the time skipped between events
+			# Process the time skipped between events
+			# before changing the state of the system.
 			diff = self._now - prev_event
 			if diff:
-				self._process_virtual(diff)
-				self._process_real(diff)
+				self._distribute_virtual(diff)
+				second_stage = True
+				# calculate the decay for the period
+				real_decay = self._decay_factor ** diff
+				self._process_real(diff, real_decay)
+				# update global statistics
+				self._total_usage += self._cpu_used * diff
+				self._total_usage *= real_decay
 
-			# TODO lista -> <time, utility>
-			# TODO printy eventow aka job end,
-			# TODO i jednak camp start??? bo utility wtedy
+# TODO lista -> <time, utility>
+# TODO printy eventow aka job end,
+# TODO i jednak camp start??? bo utility wtedy
 
-			# do work based on the event type
 			if event == Events.new_job:
 				self._new_job_event(entity)
+				sub_count -= 1
+				schedule = True
 			elif event == Events.job_end:
 				self._job_end_event(entity)
+				schedule = True
 			elif event == Events.estimate_end:
 				self._estimate_end_event(entity)
 			elif event == Events.campaign_end:
@@ -154,24 +184,40 @@ class Simulator(object):
 			else:
 				raise Exception('unknown event')
 
-			# `Events.new_job` and `Events.campaign_end` change the
-			# number of total shares.
-			# `Events.job_end` and `Events.estimate_end` change the
-			# workload of a specific campaign.
-			# Don't update on `Events.force_decay`, nothing changed.
-			if event != Events.force_decay:
-				self._update_camp_estimates()
-			# The simulation has ended if the queue is empty.
-			if not self._pq.empty():
-				self._force_next_decay()
-			else:
-				assert count == submits
-				assert not self._waiting_jobs
-				assert not self._running_jobs
 			# update event timer
 			prev_event = self._now
+
+			if not self._pq.empty():
+				# We need to process the events that happen at
+				# the same time *AND* change the campaign workloads
+				# before we can continue further.
+				next_time, next_event, _ = self._pq.peek()
+				if (next_time == self._now and
+				    next_event < Events.campaign_end):
+					continue
+
+			if second_stage:
+				self._process_virtual()
+				second_stage = False
+
+			if schedule:
+				self._schedule()
+				schedule = False
+
+			# Don't update on `force_decay`, no changes
+			# were made that influence campaign estimates.
+			if event != Events.force_decay:
+				self._update_camp_estimates()
+
+			# If now the queue is empty, the simulation has ended.
+			# We need to stop an infinite loop of `force_decay` events.
+			if not self._pq.empty():
+				self._force_next_decay()
+
 		# return simulation results
 
+#TODO ALL ASSERTS ABOUT SIM CORRECNESS
+#assert not self._waiting_jobs, 'waiting jobs left'
 #TODO KONIEC KAMP = KONIEC OSTATNIEJ PRACY A NIE KONIEC CAMP W VIRT
 #TODO AKA camp.completed_jobs[-1].end_time
 #TODO NIE TRZEBA TEGO ZAPAMIETYWAC TYLKO NA KONCU WYPISAC
@@ -180,8 +226,7 @@ class Simulator(object):
 #TODO CHECK CORRECNESS AKA
 #USER -> assert not self.active_jobs
 #USER -> assert not self.active_camps
-
-#TODO POOPISYWAC ASSERTY WSZEDZIE
+#TODO ZAMIENIC USER.SHARES NA SHARES_NORM
 
 		return self._results
 
@@ -194,20 +239,27 @@ class Simulator(object):
 		cpus = max(self._cpu_used, 1)
 		return share * cpus
 
-	def _process_virtual(self, period):
+	def _distribute_virtual(self, period):
 		"""
 		Distribute the virtual time to active users.
 		"""
 		for u in self._users.itervalues():
 			if u.active:
-				u.virtual_work(period * self._share_value(u))
+				u.set_virtual(period * self._share_value(u))
 
-	def _process_real(self, period):
+	def _process_virtual(self):
+		"""
+		Redistribute the accumulated virtual time.
+		"""
+		for u in self._users.itervalues():
+			if u.active:
+				u.virtual_work()
+
+	def _process_real(self, period, real_decay):
 		"""
 		Update the real work done by the jobs.
-		Apply the rolling decay to each user usage.
+		This also applies the rolling decay to each user usage.
 		"""
-		real_decay = self._decay_factor ** period
 		for u in self._users.itervalues():
 			u.real_work(period, real_decay)
 
@@ -286,59 +338,84 @@ class Simulator(object):
 
 	def _new_job_event(self, job):
 		"""
-		Add the job to a campaign and do a scheduling pass.
-		Update the owner activity status.
+		Add the job to a campaign. Update the owner activity status.
 		"""
-		assert job.proc <= self._cpu_limit
-		if not job.user.active:
-			# user will be active after this job submission
-			self._active_shares += job.user.shares
+		assert self._manager.sanity_check(job), 'job can never run'
+		user = job.user
+
+		if not user.active:
+			# user is now active after this job submission
+			self._active_shares += user.shares
 
 		job.estimate = self._parts.estimator.initial_estimate(job)
 		camp = self._parts.selector.find_campaign(job)
 
 		if camp is None:
-			camp = job.user.create_campaign(self._now)
+			camp = user.create_campaign(self._now)
 			#TODO print <camp start event> aka utility
 
 		camp.add_job(job)
-		job.user.add_job(job)
-
+		user.add_job(job)
+		# enqueue the job
 		self._waiting_jobs.append(job)
-		self._schedule()
 
 	def _job_end_event(self, job):
 		"""
-		Free the resources and do a scheduling pass.
+		Free the resources.
 		"""
-		job.execution_ended(self._now) #TODO MANAGER->JOB_ENDED
-		# The job predicted run time could be higher than the
-		# real run time, so we need to redistribute any extra
-		# virtual time created by the mentioned difference.
-		job.user.virtual_work(0)
-
-		# remove the job from the processors
-		self._running_jobs.remove(job)
-		self._cpu_used -= job.proc #TODO TO JUZ W MANAGER
-		self._schedule()
+		assert job.estimate >= job.run_time, 'invalid estimate'
+		job.execution_ended(self._now)
+		self._manager.job_ended(job)
+		self._cpu_used -= job.proc
 
 	def _estimate_end_event(self, job):
 		"""
+		Get a new estimate for the job.
 		"""
-		#TODO ASSERT
-		#TODO ESTIMATE_END_EVENT -> ASSERT W TYM EVENCIE ZE CAMP JEST W ACTIVE A NIE COMPLETED
-		pass
+		assert job.estimate < job.run_time, 'invalid estimate'
+		camp, user = job.camp, job.user
+
+		if not user.active:
+			# user became inactive due to an inaccurate estimate
+			user.false_inactivity += (self._now - user.last_active)
+			self._active_shares += user.shares
+
+		if not camp in user.active_camps:
+			# The new estimate will be higher than the previous
+			# one, so this campaign has to be made active again.
+			# Campaign ID corresponds to the location in the list.
+			user.completed_camps, rest = (
+				user.completed_camps[:camp.ID]
+				user.completed_camps[camp.ID:]
+			)
+			user.active_camps = rest + user.active_camps
+			assert camp == user.active_camps[0], 'invalid campaign ordering'
+
+		old_est = job.estimate
+		job.estimate = self._parts.estimator.next_estimate(job)
+		camp.job_new_estimate(job, old_est)
 
 	def _camp_end_event(self, camp):
 		"""
-		Remove the campaign. Update the owner activity status.
+		Remove the campaigns that ended in the virtual schedule.
+		Update the owner activity status.
 		"""
-		assert camp.user.active_camps[0] == camp
-		assert camp.time_left == 0
+		assert not camp.time_left, 'campaign still active'
+		user = camp.user
 
-		camp.user.active_camps.pop(0)
-		camp.user.completed_camps.append(camp)
+		if not user.active_camps or camp != user.active_camps[0]:
+			# During the campaign estimations we aren't removing
+			# the old `campaign_end` events present in the queue,
+			# so it is possible that this event is out of order.
+			debug_print("Skipping camp_end event", camp.ID, user.ID)
+			return
 
-		if not camp.user.active:
+		while user.active_camps and not user.active_camps[0].time_left:
+			# remove all of the campaigns that ends now in one go
+			ended = user.active_camps.pop(0)
+			user.completed_camps.append(ended)
+
+		if not user.active:
 			# user became inactive
-			self._active_shares -= camp.user.shares
+			user.last_active = self._now
+			self._active_shares -= user.shares
