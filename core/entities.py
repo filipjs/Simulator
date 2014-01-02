@@ -120,6 +120,11 @@ class Job(object):
 		self.camp.job_ended(self)
 		self.user.job_ended(self)
 
+	def next_estimate(self, value):
+		# notify further
+		self.camp.job_next_estimate(self, value)
+		self.user.job_next_estimate(self, value)
+		self.estimate = value
 
 class Campaign(object):
 	"""
@@ -193,10 +198,10 @@ class Campaign(object):
 		self.active_jobs.remove(job)
 		self.completed_jobs.append(job)
 
-	def job_new_estimate(self, job, old_value):
+	def job_next_estimate(self, job, new_value):
 		# update the workload
-		self._remaining -= old_value * job.proc
-		self._remaining += job.estimate * job.proc
+		self._remaining -= job.estimate * job.proc
+		self._remaining += new_value * job.proc
 
 
 class User(object):
@@ -295,6 +300,19 @@ class User(object):
 		diff = (job.estimate - job.run_time) * job.proc
 		job.camp._virtual -= diff
 		self._virt_pool += diff
+
+	def job_next_estimate(self, job, new_value):
+		if not job.camp in self.active_camps:
+			# This campaign has to be made active again.
+			# `camp.ID` corresponds to the location in the list.
+			loc = job.camp.ID
+			self.completed_camps, rest = (
+				self.completed_camps[:loc]
+				self.completed_camps[loc:]
+			)
+			self.active_camps = rest + self.active_camps
+			assert job.camp == self.active_camps[0], \
+			  'invalid campaign ordering'
 
 	def create_campaign(self, time):
 		new_camp = Campaign(self._global_count, self, time)

@@ -387,27 +387,16 @@ class Simulator(object):
 			assert job.estimate >= job.run_time, 'invalid estimate'
 			return
 		assert job.estimate < job.run_time, 'invalid estimate'
-		camp, user = job.camp, job.user
+		user = job.user
 
 		if not user.active:
 			# user became inactive due to an inaccurate estimate
 			user.false_inactivity += (self._now - user.last_active)
 			self._active_shares += user.shares
 
-		if not camp in user.active_camps:
-			# The new estimate will be higher than the previous
-			# one, so this campaign has to be made active again.
-			# Campaign ID corresponds to the location in the list.
-			user.completed_camps, rest = (
-				user.completed_camps[:camp.ID]
-				user.completed_camps[camp.ID:]
-			)
-			user.active_camps = rest + user.active_camps
-			assert camp == user.active_camps[0], 'invalid campaign ordering'
+		new_est = self._parts.estimator.next_estimate(job)
+		job.next_estimate(new_est)
 
-		old_est = job.estimate
-		job.estimate = self._parts.estimator.next_estimate(job)
-		camp.job_new_estimate(job, old_est)
 		# add the next event
 		self._pq.add(
 			job.start_time + job.estimate,
