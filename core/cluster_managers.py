@@ -59,14 +59,8 @@ class _BaseNodeMap(object):
 		"""
 		raise NotImplemented
 
-	@abstractproperty
-	def empty(self):
-		"""
-		"""
-		raise NotImplemented
 
-
-class BaseNodeManager(object):
+class BaseManager(object):
 	"""
 
 	"""
@@ -241,11 +235,8 @@ class _SingletonNodeMap(_BaseNodeMap):
 	def remove(self, other):
 		self._cpus -= other._cpus
 
-	def empty(self):
-		return not self._cpus
 
-
-class SingletonNodeManager(BaseNodeManager):
+class SingletonManager(BaseManager):
 	"""
 	"""
 

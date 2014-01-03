@@ -109,14 +109,15 @@ class Simulator(object):
 		self._users = users
 		self._settings = settings
 		self._parts = parts
-		self._active_shares = 0
+		self._cpu_limit = sum(nodes.itervalues())
 		self._cpu_used = 0
+		self._active_shares = 0
 		self._total_usage = 0
 		# create an appropriate cluster manager
 		if len(nodes) == 1:
-			self._manager = cluster_managers.SingletonNodeManager(nodes)
+			self._manager = cluster_managers.SingletonManager(nodes, settings)
 		else:
-			self._manager = 'b'#TODO cluster_managers...(nodes)
+			self._manager = cluster_managers.SlurmManager(nodes, settings)
 
 	def run(self):
 		"""
