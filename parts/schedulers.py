@@ -27,7 +27,7 @@ class BaseScheduler(object):
 		Init the class with a `Settings` instance.
 		"""
 		self._settings = settings
-
+#TODO OPROCZ JOB BRAC JESZCZE SIMULATION_STATS AKA CPU_USED, TOTAL_USAGE, ACTIVE_SHARES
 	@abstractmethod
 	def job_priority_key(self, job):
 		"""
@@ -73,7 +73,7 @@ class OStrichScheduler(BaseScheduler):
 		camp_prio = self._job_camp_index(job)
 		return (end, job.camp.created, job.user.ID, job.camp.ID, camp_prio)
 
-
+#TODO NAZWA = SLURMFAIRSHARE
 class FairshareScheduler(BaseScheduler):
 	"""
 	SLURM implementation of the Fairshare algorithm.
@@ -92,3 +92,4 @@ class FairshareScheduler(BaseScheduler):
 		# However, we are only interested in the ordering, so we can
 		# skip the constant values to greatly simplify the formula.
 		return (fairshare, job.submit)
+#TODO ZROBIC PELNY WZOR I SYMULOWAC BLEDY ZAOKRAGLEN DLA DOUBLE W C

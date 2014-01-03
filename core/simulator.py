@@ -112,6 +112,7 @@ class Simulator(object):
 		self._settings = settings
 		self._parts = parts
 		self._active_shares = 0
+		#TODO NIE LCIZYC SAMEMU TYLKO NIECH ROBI TO MANAGER??
 		self._cpu_used = 0
 		self._cpu_limit = cpus
 		self._total_usage = 0
@@ -325,6 +326,10 @@ class Simulator(object):
 					Events.job_end,
 					job
 				)
+			#if can_run:
+			#job.start_execution(now)
+		## add the next event if we will need it
+		#if job.estimate < job.run_time:
 				self._pq.add(
 					self._now + job.estimate,
 					Events.estimate_end,
@@ -350,7 +355,7 @@ class Simulator(object):
 		"""
 		Add the job to a campaign. Update the owner activity status.
 		"""
-		assert self._manager.sanity_check(job), 'job can never run'
+		assert self._manager.sanity_test(job), 'job can never run'
 		user = job.user
 
 		if not user.active:
@@ -373,6 +378,7 @@ class Simulator(object):
 		"""
 		Free the resources.
 		"""
+		assert job.estimate >= job.run_time, 'invalid estimate'
 		job.execution_ended(self._now)
 		self._manager.job_ended(job)
 		self._cpu_used -= job.proc
@@ -381,11 +387,6 @@ class Simulator(object):
 		"""
 		Get a new estimate for the job.
 		"""
-		if job.completed:
-			# We aren't removing the `estimate_end` events
-			# when the job ends, so there might be leftovers.
-			assert job.estimate >= job.run_time, 'invalid estimate'
-			return
 		assert job.estimate < job.run_time, 'invalid estimate'
 		user = job.user
 
@@ -397,12 +398,13 @@ class Simulator(object):
 		new_est = self._parts.estimator.next_estimate(job)
 		job.next_estimate(new_est)
 
-		# add the next event
-		self._pq.add(
-			job.start_time + job.estimate,
-			Events.estimate_end,
-			job
-		)
+		# add the next event if we will need it
+		if job.estimate < job.run_time:
+			self._pq.add(
+				job.start_time + job.estimate,
+				Events.estimate_end,
+				job
+			)
 
 	def _camp_end_event(self, camp):
 		"""

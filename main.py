@@ -188,6 +188,9 @@ def run(workload, args):
 				cpus = sim_conf.cpu_count
 			else:
 				cpus = cpu_percentile(job_slice, sim_conf.cpu_percent)
+#TODO MOZE TUTAJ OD RAZU ZROBIC TEZ ROZKLAD CPUS NA NODY NA PODSTAWIE CPUS_PER_NODE??
+#TODO I WTEDY NODE == 1 --> SINGLETON_NODE_MANAGER
+
 			# reset the entities
 			users_slice = {}
 			for j in job_slice:
@@ -209,6 +212,7 @@ def run(workload, args):
 #last_sub = jobs[b['last']].submit
 #TODO get results -> drop margins (AKA EXTRA FLAGA Z PRZODU) -> save to file
 #TODO DODAC TIME.CTIME DO FILENAME! default=time.ctime(),
+#TODO ARGS SIE NIGDZIE NIE ZMIENIAJA? WYPISYWAC ARGS JAKO CONTEXT W KAZDYM PLIKU W 1 LINII
 
 ##
 ## Action ``config``.
