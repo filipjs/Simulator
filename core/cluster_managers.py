@@ -83,9 +83,8 @@ class BaseManager(object):
 		Return if the job is ever runnable in the current configuration.
 		"""
 		ret = True
-		if hasattr(job, 'cpu_per_node'):
-			ret &= (job.cpu_per_node <= self._max_cpu_per_node)
-			ret &= (job.nodes <= self._node_count)
+		ret &= (job.nodes <= self._node_count)
+		ret &= (job.pn_cpus <= self._max_cpu_per_node)
 		ret &= (job.proc <= self._cpu_limit)
 		return ret
 
@@ -220,9 +219,11 @@ class BaseManager(object):
 		"""
 		Free the resources taken by the job.
 		"""
-		assert job.res is not None, 'missing job resources'
+		self._space_list.begin = job.end_time
+		assert self._space_list.length >= 0, 'some finished jobs not removed'
+		assert hasattr(job, 'res'), 'missing job resources'
 
-		last_space_end = job.start_time + job.time_limit:
+		last_space_end = job.start_time + job.time_limit
 		prev, it = None, self._space_list
 
 		while it.end < last_space_end:
@@ -239,8 +240,8 @@ class BaseManager(object):
 		else:
 			it.avail.add(job.res)
 			it.job_last_space -= 1
-
-		job.res = None
+		# finally clear
+		del job.res
 
 
 class _SingletonNodeMap(_BaseNodeMap):

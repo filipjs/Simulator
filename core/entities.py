@@ -50,6 +50,8 @@ class Job(object):
 	"""
 
 	time_limit = ReadOnlyAttr()
+	nodes = ReadOnlyAttr()
+	pn_cpus = ReadOnlyAttr()
 	camp = ReadOnlyAttr()
 
 	def __init__(self, stats, user):

@@ -6,6 +6,7 @@ Submitters:
 	A submitter is used to simulate a job owner who sets the (possibly inaccurate)
 	job time limit. We are however assuming that the time limit **CANNOT** be lower
 	than the job run time.
+	A submitter is also used to set the required number of nodes for the job.
 
 Customizing:
 	Create a new subclass of `BaseSubmitter` and override the required methods.
@@ -18,6 +19,7 @@ class BaseSubmitter(object):
 	Submitters base class. Subclasses are required to override:
 
 	1) _get_limit
+	2) (optionally) _get_nodes
 
 	You can access the `Settings` using `self._settings`.
 	"""
@@ -49,6 +51,36 @@ class BaseSubmitter(object):
 		  **DO NOT** set the `job.time_limit` yourself.
 		"""
 		raise NotImplemented
+
+	def config(self, job):
+		"""
+		Public wrapper method.
+		Run and check the correctness of `_get_nodes`.
+		"""
+		nodes = self._get_nodes(job)
+		assert job.nodes is None, 'nodes already set'
+		assert job.pn_cpus is None, 'cpu per node already set'
+		if nodes:
+			pn_cpus = job.proc / nodes
+			assert nodes * pn_cpus == job.proc, 'invalid configuration'
+		else:
+			pn_cpus = 0
+		return nodes, pn_cpus
+
+	def _get_nodes(self, job):
+		"""
+		Specify the number of nodes to run the job on.
+
+		The default implementation return `0` as a sign to
+		turn the feature off.
+
+		Note:
+		  **DO NOT** set the `job.nodes` or `job.pn_cpus` yourself.
+
+		  In rare cases you can modify the `job.proc` if you feel
+		  that otherwise there isn't a valid configuration.
+		"""
+		return 0
 
 
 class OracleSubmitter(BaseSubmitter):

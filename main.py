@@ -169,6 +169,8 @@ def run(workload, args):
 	# calculate the missing values
 	for j in jobs:
 		j.time_limit = part_conf.submitter.time_limit(j)
+		j.nodes, j.pn_cpus = part_conf.submitter.config(j)
+
 	for u in users.itervalues():
 		u.shares = part_conf.share.user_share(u)
 

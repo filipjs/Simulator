@@ -103,7 +103,7 @@ class Simulator(object):
 		  settings: algorithmic settings
 		  parts: *instances* of all the system parts
 		"""
-		assert jobs and users and cpus, 'invalid arguments'
+		assert jobs and users and nodes, 'invalid arguments'
 		self._future_jobs = jobs
 		self._waiting_jobs = []
 		self._users = users
