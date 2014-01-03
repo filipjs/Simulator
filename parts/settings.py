@@ -58,7 +58,11 @@ alg_templates = [
 	Template('default_limit', 'Default job time limit', 7, 'DAYS',
 		 loc='DefaultTimeSubmitter'),
 	Template('share_file', 'File with user shares', 'shares.txt',
-		 loc='CustomShare')
+		 loc='CustomShare'),
+	Template('bf_depth', 'The maximum number of jobs to backfill', 50),
+	Template('bf_window', 'The amount of time to look into the future'
+		 'when considering jobs for backfilling', 24, 'HOURS'),
+	Template('bf_resolution', 'The resolution of the backfilling data', 1, 'SEC'),
 ]
 
 # You can change the default classes here.
@@ -82,10 +86,9 @@ sim_templates = [
 	Template('serial', 'Change parallel jobs to serial versions', False),
 	Template('cpu_count', 'Set a static number of CPUs, takes precedence', 0),
 	Template('cpu_percent', 'Set the number of CPUs to the P-th percentile', 70),
+	Template('cpu_per_node', 'Divide the cluster into nodes with'
+		 'said number of CPUs', 0),
 ]
-#TODO MISSING OPCJE
-#SIM -> CPU_PER_NODE
-#ALG -> BF_WINDOW BF_DEPTH BF_RESOLUTION (??)
 
 
 class Settings(object):

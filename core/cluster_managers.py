@@ -295,6 +295,7 @@ class SingletonManager(BaseManager):
 	"""
 	"""
 
+	@property
 	def _node_map(self):
 		return _SingletonNodeMap
 

@@ -309,7 +309,7 @@ class User(object):
 			# `camp.ID` corresponds to the location in the list.
 			loc = job.camp.ID
 			self.completed_camps, rest = (
-				self.completed_camps[:loc]
+				self.completed_camps[:loc],
 				self.completed_camps[loc:]
 			)
 			self.active_camps = rest + self.active_camps

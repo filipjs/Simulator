@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-def debug_print(*args, flag=None, name=None):
+def debug_print(flag, name, *args):
 	"""
 	Print the arguments if the `DEBUG_FLAG` is on.
 	"""
