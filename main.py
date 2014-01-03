@@ -188,8 +188,16 @@ def run(workload, args):
 				cpus = sim_conf.cpu_count
 			else:
 				cpus = cpu_percentile(job_slice, sim_conf.cpu_percent)
-#TODO MOZE TUTAJ OD RAZU ZROBIC TEZ ROZKLAD CPUS NA NODY NA PODSTAWIE CPUS_PER_NODE??
-#TODO I WTEDY NODE == 1 --> SINGLETON_NODE_MANAGER
+			# setup the node configuration
+			if sim_conf.cpu_per_node:
+				full_count = cpus / sim_conf.cpu_per_node
+				nodes = {i: sim_conf.cpu_per_node
+						for i in xrange(full_count)}
+				rest = cpus % sim_conf.cpu_per_node
+				if rest:
+					nodes[len(nodes)] = rest
+			else:
+				nodes = {0: cpus}
 
 			# reset the entities
 			users_slice = {}
@@ -200,7 +208,7 @@ def run(workload, args):
 				u.reset()
 			# run the simulation
 			my_simulator = simulator.Simulator(job_slice, users_slice,
-							   cpus, alg_conf, part_conf)
+							   nodes, alg_conf, part_conf)
 			results_slice = my_simulator.run()
 
 			# TODO TUTAJ SAVE RESULTS

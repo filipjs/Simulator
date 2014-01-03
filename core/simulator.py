@@ -3,6 +3,7 @@ import heapq
 import itertools
 import math
 from functools import partial
+import cluster_managers
 from util import debug_print
 
 
@@ -93,7 +94,7 @@ class Simulator(object):
 	virtual campaigns and effective CPU usage.
 	"""
 
-	def __init__(self, jobs, users, cpus, cpus_per_node, settings, parts):
+	def __init__(self, jobs, users, nodes, settings, parts):
 		"""
 		Args:
 		  jobs: a list of submitted `Jobs`.
@@ -109,15 +110,13 @@ class Simulator(object):
 		self._settings = settings
 		self._parts = parts
 		self._active_shares = 0
-		#TODO NIE LCIZYC SAMEMU TYLKO NIECH ROBI TO MANAGER??
 		self._cpu_used = 0
-		self._cpu_limit = cpus
 		self._total_usage = 0
 		# create an appropriate cluster manager
-		if not cpus_per_node:
-			self._manager = 'a'(cpus)#TODO
+		if len(nodes) == 1:
+			self._manager = cluster_managers.SingletonNodeManager(nodes)
 		else:
-			self._manager = 'b'(cpus, cpus_per_node)
+			self._manager = 'b'#TODO cluster_managers...(nodes)
 
 	def run(self):
 		"""
@@ -429,3 +428,5 @@ class Simulator(object):
 			self._active_shares -= user.shares
 		#TODO JESLI ZA WOLNO DZIALA, TUTAJ MOZNA RECZNIE DODAWAC POJEDYNCZA KAMPANIE
 		#TODO JESLI USER JEST DALEJ ACTIVE : ZMIANA SHARES -> PRZELICZYC ALL
+
+#TODO collections.deque() MOZNA PODMIENIC USER>ACTIVE CAMPS (ALE NIE COMPLETED BO POTRZEBA SLICES)

@@ -42,14 +42,28 @@ class _BaseNodeMap(object):
 	__metaclass__ = ABCMeta
 
 	@abstractmethod
-	def union(self, another):
-		pass
+	def combine(self, other):
+		"""
+		"""
+		raise NotImplemented
+
 	@abstractmethod
-	def intersect(self, another):
-		pass
+	def intersect(self, other):
+		"""
+		"""
+		raise NotImplemented
+
 	@abstractmethod
-	def remove(self, another):
-		pass
+	def remove(self, other):
+		"""
+		"""
+		raise NotImplemented
+
+	@abstractproperty
+	def empty(self):
+		"""
+		"""
+		raise NotImplemented
 
 
 class BaseNodeManager(object):
@@ -59,29 +73,27 @@ class BaseNodeManager(object):
 
 	__metaclass__ = ABCMeta
 
-	#def __init__(self):
-		#self._space_list = _NodeSpace(0, float('inf'), count, None)
-		#self._space_list.reserved = 0
-
-	def __init__(self, settings):
+	def __init__(self, nodes, settings):
 		assert settings.bf_window > 0, 'invalid bf_window'
 		assert settings.bf_resolution > 0, 'invalid bf_resolution'
 		self._settings = settings
-		self._space_list = self._get_initial_space()
+		self._space_list = _NodeSpace(0, float('inf'),
+			self._node_map(nodes), self._node_map(), None)
+		# configuration
+		self._node_count = len(nodes)
+		self._max_cpu_per_node = nodes[0]
+		self._cpu_limit = sum(nodes.itervalues())
 
-	@abstractmethod
 	def sanity_test(self, job):
 		"""
 		Return if the job is ever runnable in the current configuration.
 		"""
-		raise NotImplemented
-
-	@abstractmethod
-	def _get_initial_space(self):
-		"""
-		Return the initial `_NodeSpace` element.
-		"""
-		raise NotImplemented
+		ret = True
+		if hasattr(job, 'cpu_per_node'):
+			ret &= (job.cpu_per_node <= self._max_cpu_per_node)
+			ret &= (job.nodes <= self._node_count)
+		ret &= (job.proc <= self._cpu_limit)
+		return ret
 
 	@abstractproperty
 	def _node_map(self):
@@ -117,6 +129,7 @@ class BaseNodeManager(object):
 		"""
 		self._now = now
 		self._space_list.begin = now  # advance the first window
+		#TODO JAKAS KOMPRESJA SPACE LIST??
 		assert self._space_list.length > 0, 'some finished jobs not removed'
 
 	def try_schedule(self, job):
@@ -175,19 +188,20 @@ class BaseNodeManager(object):
 			last.end = new_space.begin
 			last.next = new_space
 
-		if can_run:
-			#TODO HUH??
-			last.job_last_space += 1
-
 		# get the resources from the `avail` node map
 		res = self._assign_resources(avail, job, not can_run)
 
-		# update the nodes in all spaces
+		if can_run:
+			#TODO HUH??
+			last.job_last_space += 1
+			job.res = res
+
+		# update the available nodes in all spaces
 		it = first
-		while it != last:
+		while it != last.next:
 			it.avail.remove(res)
 			if not can_run:
-				it.reserved.union(res)
+				it.reserved.combine(res)
 			it = it.next
 
 		return can_run
@@ -198,37 +212,52 @@ class BaseNodeManager(object):
 		"""
 		it = self._space_list
 		while it is not None:
-			it.avail.union(it.reserved)
+			it.avail.combine(it.reserved)
 			it.reserved = self._node_map()
 			it = it.next
+
+	def job_ended(self, job):
+		"""
+		"""
+		pass
 
 
 class _SingletonNodeMap(_BaseNodeMap):
 	"""
 	"""
-	pass
+
+	def __init__(self, nodes=None):
+		if nodes:
+			self._cpus = nodes[0]
+		else:
+			self._cpus = 0
+
+	def combine(self, other):
+		self._cpus += other._cpus
+
+	def intersect(self, other):
+		self._cpus = min(self._cpus, other._cpus)
+
+	def remove(self, other):
+		self._cpus -= other._cpus
+
+	def empty(self):
+		return not self._cpus
+
 
 class SingletonNodeManager(BaseNodeManager):
 	"""
 	"""
 
-	def __init__(self, nodes, settings):
-		BaseNodeManager.__init__(self, settings)
+	def _node_map(self):
+		return _SingletonNodeMap
 
-		#self._cpu_used = 0
-		#self._cpu_limit = cpus
+	def _check_nodes(self, avail, job):
+		return job.proc <= avail._cpus
 
-	#def sanity_test(self, job):
-		#return job.proc <= self._cpu_limit
+	def _assign_resources(self, avail, job, reservation):
+		return self._node_map({0:job.proc})
 
-	#def clear_reservations(self):
-		#"""
-
-		#"""
-		#it = self._space_list
-		#while it is not None:
-			#it.nodes += it.reserved
-			#it.reserved = 0
 ##TODO GDZIES ASSERTY ZE NIE MA NIC RESERVED!!
 ##TODO PRZED KAZDA FUNKCJA TRZEBA ROBIC ZWIJANIE AKA FIRST.BEGIN = NOW
 ##TODO I TERAZ MOZE SIE ZDAZYC ZE SIZE < 0 ALE TYLKO JESLI FIRST.NODES == NEXT.NODES??
