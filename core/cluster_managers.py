@@ -42,13 +42,13 @@ class _BaseNodeMap(object):
 	__metaclass__ = ABCMeta
 
 	@abstractmethod
-	def combine(self, other):
+	def intersect(self, other):
 		"""
 		"""
 		raise NotImplemented
 
 	@abstractmethod
-	def intersect(self, other):
+	def add(self, other):
 		"""
 		"""
 		raise NotImplemented
@@ -121,9 +121,9 @@ class BaseManager(object):
 		"""
 		Prepare the node manager for the next scheduling pass.
 		"""
+		self._reservations = 0
 		self._now = now
 		self._space_list.begin = now  # advance the first window
-		#TODO JAKAS KOMPRESJA SPACE LIST??
 		assert self._space_list.length > 0, 'some finished jobs not removed'
 
 	def try_schedule(self, job):
@@ -134,6 +134,8 @@ class BaseManager(object):
 		total_time = 0
 		it = first = self._space_list
 		avail = None
+
+#TODO WINDOW ZROBIC ZE ZAOKRAGLAC TYLKO END TIMY I TIME LIMIT ALE W GORE!!!
 
 		while True:
 			if avail is None:
@@ -154,66 +156,91 @@ class BaseManager(object):
 				# because we are using set intersection on the nodes.
 				it = first = first.next
 				avail = None
+				# Maybe we can stop, if the potential start is already
+				# outside of the backfilling window.
+				if first.begin > self._now + self._settings.bf_window:
+					return False
 
 		# check if the job can be executed now
 		can_run = (first == self._space_list)
 
-		if not can_run and first.begin > self._now + self._settings.bf_window
-			# reservation outside of the backfilling window
-			return False
-
-		# At this point, we know that the job spans the spaces from
-		# `first` to `last`. However the `last` one might need to be split.
-		extra_time = total_time - job.time_limit
-
-#TODO JAK WINDOW TO JUZ TUTAJ I WTEDY ZAOOKRAGLAC LAST>END I NEW>BEGIN??
-
-#/* If we decrease the resolution of our timing information, this can
-#* decrease the number of records managed and increase performance */
-#start_time = (start_time / backfill_resolution) * backfill_resolution;
-#end_reserve = (end_reserve / backfill_resolution) * backfill_resolution;
-
-		if extra_time > 0:
+		# At this point, we know that the job spans the spaces from `first`
+		# to `last` (inclusive). However we have to split the last one.
+		if total_time > job.time_limit:
 			# Divide the `last` space appropriately and
-			# create a new space to occupy the rest.
+			# create a new space to occupy the hole.
 			new_space = copy.deepcopy(last)
-			new_space.begin = last.end - extra_time
+			new_space.begin = first.begin + job.time_limit
 
 			last.end = new_space.begin
 			last.next = new_space
+			last.job_last_space = 0
+		if can_run:
+			last.job_last_space += 1
 
 		# get the resources from the `avail` node map
 		res = self._assign_resources(avail, job, not can_run)
-
 		if can_run:
-			#TODO HUH??
-			last.job_last_space += 1
 			job.res = res
-
+		else:
+			self._reservations += 1
 		# update the available nodes in all spaces
 		it = first
-		while it != last.next:
+		while True:
 			it.avail.remove(res)
 			if not can_run:
-				it.reserved.combine(res)
+				it.reserved.add(res)
+			if it == last:
+				break
 			it = it.next
-
 		return can_run
 
 	def clear_reservations(self):
 		"""
 		Scheduling pass is over. Clear the created reservations.
 		"""
-		it = self._space_list
-		while it is not None:
-			it.avail.combine(it.reserved)
-			it.reserved = self._node_map()
-			it = it.next
+		if not self._reservations:
+			# nothing to clear
+			return
+
+		prev, it = None, self._space_list
+
+		while it.next is not None:
+			if not it.job_last_space:
+				# we can safely remove this space
+				it.next.begin = it.begin
+				prev.next = it.next
+				it = it.next
+			else:
+				it.avail.add(it.reserved)
+				it.reserved = self._node_map()
+				prev, it = it, it.next
 
 	def job_ended(self, job):
 		"""
+		Free the resources taken by the job.
 		"""
-		pass
+		assert job.res is not None, 'missing job resources'
+
+		last_space_end = job.start_time + job.time_limit:
+		prev, it = None, self._space_list
+
+		while it.end < last_space_end:
+			it.avail.add(job.res)
+			prev, it = it, it.next
+
+		assert it.end == last_space_end, 'missing job last space'
+		assert it.job_last_space > 0, 'invalid space'
+
+		if it.job_last_space == 1:
+			# we can safely remove this space
+			it.next.begin = it.begin
+			prev.next = it.next
+		else:
+			it.avail.add(job.res)
+			it.job_last_space -= 1
+
+		job.res = None
 
 
 class _SingletonNodeMap(_BaseNodeMap):
@@ -226,14 +253,17 @@ class _SingletonNodeMap(_BaseNodeMap):
 		else:
 			self._cpus = 0
 
-	def combine(self, other):
-		self._cpus += other._cpus
-
 	def intersect(self, other):
 		self._cpus = min(self._cpus, other._cpus)
 
+	def add(self, other):
+		self._cpus += other._cpus
+
 	def remove(self, other):
 		self._cpus -= other._cpus
+
+	def __repr__(self):
+		return "CPU count: {}".format(self._cpus)
 
 
 class SingletonManager(BaseManager):
@@ -248,27 +278,3 @@ class SingletonManager(BaseManager):
 
 	def _assign_resources(self, avail, job, reservation):
 		return self._node_map({0:job.proc})
-
-##TODO GDZIES ASSERTY ZE NIE MA NIC RESERVED!!
-##TODO PRZED KAZDA FUNKCJA TRZEBA ROBIC ZWIJANIE AKA FIRST.BEGIN = NOW
-##TODO I TERAZ MOZE SIE ZDAZYC ZE SIZE < 0 ALE TYLKO JESLI FIRST.NODES == NEXT.NODES??
-##TODO AKA PRACA SKONCZYLA SIE PRZED TIME LIMIT??
-
-##TODO ZROBIC MERGE SPACE JESLI NODES == NODES??
-##TODO I WTEDY W JOB.END POTRZEBA 'UNMERGE'
-
-	#def job_ended(self, job, now):
-		#"""
-
-		#"""
-		#job.execution_ended(now)
-		#self._cpu_used -= job.proc
-		## Node spaces are built based on `job.time_limit`,
-		## but the actual `job.run_time` can be shorter.
-
-		#it = self._space_list
-		#while True:
-			#if it.end > job.start_time + job.time_limit:
-				#break
-			#it.nodes += job.proc
-			#it = it.next
