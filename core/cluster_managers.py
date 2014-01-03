@@ -1,8 +1,18 @@
 # -*- coding: utf-8 -*-
-from abc import ABCMeta, abstractmethod
 import copy
+from abc import ABCMeta, abstractmethod
+from functools import partial
+from util import debug_print
+
+
+# set up debug level for this module
+DEBUG_FLAG = __debug__
+debug_print = partial(debug_print, flag=DEBUG_FLAG, name=__name__)
+
 
 """
+
+
 """
 
 
@@ -38,7 +48,7 @@ class _BaseNodeMap(object):
 	def intersect(self, another):
 		pass
 	@abstractmethod
-	def remove_res(self, another):
+	def remove(self, another):
 		pass
 
 
@@ -165,6 +175,9 @@ class BaseNodeManager(object):
 			last.end = new_space.begin
 			last.next = new_space
 
+		if can_run:
+			#TODO HUH??
+			last.job_last_space += 1
 
 		# get the resources from the `avail` node map
 		res = self._assign_resources(avail, job, not can_run)
@@ -172,7 +185,7 @@ class BaseNodeManager(object):
 		# update the nodes in all spaces
 		it = first
 		while it != last:
-			it.avail.remove_res(res)
+			it.avail.remove(res)
 			if not can_run:
 				it.reserved.union(res)
 			it = it.next

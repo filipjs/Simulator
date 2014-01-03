@@ -2,16 +2,13 @@
 import heapq
 import itertools
 import math
+from functools import partial
+from util import debug_print
 
 
+# set up debug level for this module
 DEBUG_FLAG = __debug__
-
-def debug_print(*args):
-	"""
-	Print the arguments if the `DEBUG_FLAG` is on.
-	"""
-	if DEBUG_FLAG:
-		print ' '.join(map(str, args))
+debug_print = partial(debug_print, flag=DEBUG_FLAG, name=__name__)
 
 
 class Events(object):
