@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import copy
-from abc import ABCMeta, abstractmethod
+from abc import ABCMeta, abstractmethod, abstractproperty
 from functools import partial
 from util import debug_print
 
@@ -55,6 +55,18 @@ class _BaseNodeMap(object):
 
 	@abstractmethod
 	def remove(self, other):
+		"""
+		"""
+		raise NotImplemented
+
+	@abstractmethod
+	def clear(self):
+		"""
+		"""
+		raise NotImplemented
+
+	@abstractproperty
+	def size(self):
 		"""
 		"""
 		raise NotImplemented
@@ -212,7 +224,7 @@ class BaseManager(object):
 				it = it.next
 			else:
 				it.avail.add(it.reserved)
-				it.reserved = self._node_map()
+				it.reserved.clear()
 				prev, it = it, it.next
 
 	def job_ended(self, job):
@@ -224,19 +236,25 @@ class BaseManager(object):
 		assert hasattr(job, 'res'), 'missing job resources'
 
 		last_space_end = job.start_time + job.time_limit
-		prev, it = None, self._space_list
+		it = self._space_list
 
 		while it.end < last_space_end:
+			assert not it.reserved, 'reservations not removed'
 			it.avail.add(job.res)
-			prev, it = it, it.next
+			it = it.next
 
 		assert it.end == last_space_end, 'missing job last space'
 		assert it.job_last_space > 0, 'invalid space'
 
 		if it.job_last_space == 1:
-			# we can safely remove this space
-			it.next.begin = it.begin
-			prev.next = it.next
+			# we can safely merge this space with the next one
+			it.end = it.next.end
+			it.avail = it.next.avail
+			it.reserved = it.next.reserved
+			assert not it.reserved, 'reservations not removed'
+			it.next = it.next.next
+			it.job_last_space = it.next.job_last_space
+			it.next.next = None  # garbage collection
 		else:
 			it.avail.add(job.res)
 			it.job_last_space -= 1
@@ -262,6 +280,12 @@ class _SingletonNodeMap(_BaseNodeMap):
 
 	def remove(self, other):
 		self._cpus -= other._cpus
+
+	def clear(self):
+		self._cpus = 0
+
+	def size(self):
+		return self._cpus
 
 	def __repr__(self):
 		return "CPU count: {}".format(self._cpus)
