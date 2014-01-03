@@ -27,7 +27,14 @@ class BaseScheduler(object):
 		Init the class with a `Settings` instance.
 		"""
 		self._settings = settings
-#TODO OPROCZ JOB BRAC JESZCZE SIMULATION_STATS AKA CPU_USED, TOTAL_USAGE, ACTIVE_SHARES
+
+	def update_stats(self, stats):
+		"""
+		Update the run time statistics.
+		Stats consist of: cpu_used, active_shares, total_usage.
+		"""
+		self._stats = stats
+
 	@abstractmethod
 	def job_priority_key(self, job):
 		"""
@@ -41,7 +48,7 @@ class BaseScheduler(object):
 		raise NotImplemented
 
 
-class OStrichScheduler(BaseScheduler):
+class OStrich(BaseScheduler):
 	"""
 	Default implementation of the OStrich algorithm.
 	"""
@@ -60,21 +67,21 @@ class OStrichScheduler(BaseScheduler):
 		Priority ordering for the scheduler:
 		1) faster ending campaigns
 		2) earlier created campaigns
-		3) user ID, camp ID (needed to break previous ties)
+		3) camp ID, user ID (needed to break previous ties)
 		4) priority inside campaigns
-		     (previous ties iff jobs are from the same campaign)
+		     (tied here iff jobs are from the same campaign)
 		"""
 		end = job.camp.time_left + job.camp.offset
 		end = float(end) / job.user.shares
 		# The `end` should be further multiplied by
-		#   `Simulator.active_shares` / `Simulator.cpu_used`.
+		#   `_stats.active_shares` / `_stats.cpu_used`.
 		# However, that gives the same value for all the jobs
 		# and we only need the ordering, not the absolute value.
 		camp_prio = self._job_camp_index(job)
-		return (end, job.camp.created, job.user.ID, job.camp.ID, camp_prio)
+		return (end, job.camp.created, job.camp.ID, job.user.ID, camp_prio)
 
-#TODO NAZWA = SLURMFAIRSHARE
-class FairshareScheduler(BaseScheduler):
+
+class SlurmFairshare(BaseScheduler):
 	"""
 	SLURM implementation of the Fairshare algorithm.
 	"""
@@ -83,13 +90,20 @@ class FairshareScheduler(BaseScheduler):
 		"""
 		Prioritize the jobs based on the owner's account service level.
 		Ties are ordered by earlier submit.
+
+		The full formula for SLURM fairshare priority is:
+		  pow(2.0, -(effective_usage / shares_norm))
+
+		  effective_usage = my usage / global usage
+		  shares_norm = my share / total shares
+
+		The priority then is multiplied by some weight (usually around 10k-100k).
+		This means, that at high over-usage all priorities are the same.
 		"""
-		fairshare = job.user.cpu_clock_used / job.user.shares
-		# The full formula for SLURM fairshare priority is:
-		#   pow(2.0, -(effective_usage / shares_norm)), where
-		#     effective_usage = my usage / global usage
-		#     shares_norm = my share / total shares
-		# However, we are only interested in the ordering, so we can
-		# skip the constant values to greatly simplify the formula.
-		return (fairshare, job.submit)
-#TODO ZROBIC PELNY WZOR I SYMULOWAC BLEDY ZAOKRAGLEN DLA DOUBLE W C
+		if not self._stats['total_usage']:
+			fairshare = 1
+		else:
+			effective = job.user.cpu_clock_used / self._stats['total_usage']
+			fairshare = 2.0 ** -(effective / job.user.shares)
+		prio = int(fairshare * 100000)
+		return (-prio, job.submit)

@@ -316,10 +316,16 @@ class Simulator(object):
 			return
 
 		#sort the jobs using the ordering defined by the scheduler
+		self._parts.scheduler.update_stats({
+			'cpu_used': self._cpu_used,
+			'active_shares': self._active_shares,
+			'total_usage': round(self._total_usage, 3)
+		})
 		self._waiting_jobs.sort(
 			key=self._parts.scheduler.job_priority_key,
 			reverse=True
 		)
+
 		self._manager.prepare(self._now)
 
 		bf_mode = False
