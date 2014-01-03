@@ -99,7 +99,7 @@ class Simulator(object):
 		Args:
 		  jobs: a list of submitted `Jobs`.
 		  users: a dictionary of `Users`.
-		  cpus: the number of CPUs in the cluster.
+		  nodes: the configuration of nodes in the cluster.
 		  settings: algorithmic settings
 		  parts: *instances* of all the system parts
 		"""
@@ -298,55 +298,75 @@ class Simulator(object):
 			'Dummy event'
 		)
 
+	@property
+	def _cpu_free(self):
+		"""
+		A simple auto-updating property.
+		"""
+		return self._cpu_limit - self._cpu_used
+
 	def _schedule(self):
 		"""
 		Try to execute the highest priority jobs from
 		the `_waiting_jobs` list.
 		"""
+
+		if not self._cpu_free or not self._waiting_jobs:
+			# nothing to do
+			return
+
 		#sort the jobs using the ordering defined by the scheduler
 		self._waiting_jobs.sort(
 			key=self._parts.scheduler.job_priority_key,
 			reverse=True
 		)
+		self._manager.prepare(self._now)
 
-		while self._waiting_jobs:
-			free = self._cpu_limit - self._cpu_used
-			if self._waiting_jobs[-1].proc <= free:
-				# execute the job
-				job = self._waiting_jobs.pop()
-				self._running_jobs.append(job)
+		bf_mode = False
+		bf_checked = 0
+
+		# last job has highest priority
+		prio_iter = len(self._waiting_jobs) - 1
+
+		while self._cpu_free and prio_iter >= 0:
+			job = self._waiting_jobs[prio_iter]
+
+			run = self._manager.try_schedule(job)
+			if run:
+				# remove from queue
+				j2 = self._waiting_jobs.pop(prio_iter)
+				assert job == j2, 'scheduled wrong job'
+
+				# update stats
 				job.start_execution(self._now)
 				self._cpu_used += job.proc
+				assert self._cpu_free >= 0, 'invalid cpu count'
+
 				# add events
 				self._pq.add(
 					self._now + job.run_time,
 					Events.job_end,
 					job
 				)
-			#if can_run:
-			#job.start_execution(now)
-		## add the next event if we will need it
-		#if job.estimate < job.run_time:
-				self._pq.add(
-					self._now + job.estimate,
-					Events.estimate_end,
-					job
-				)
+				if job.estimate < job.run_time:
+					self._pq.add(
+						self._now + job.estimate,
+						Events.estimate_end,
+						job
+					)
+				debug_print('Scheduled job:', job.ID, job.run_time,
+					'backfill:', bf_mode)
 			else:
-				# only the top priority job can be scheduled
+				bf_mode = True
+			# go to next job by priority
+			prio_iter -= 1
+			# stop if the backfilling checked enough jobs
+			if bf_mode:
+				bf_checked += 1
+			if bf_checked > self._settings.bf_depth:
 				break
-#TODO DODAC CLASSE CLUSTER
-# CLUSTER->CAN_RUN
-# CLUSTER->ADD_RESERVATIONS
-# CLUSTER->CLEAR_RESERCATIONS
-# CLUSTER->RUN JOB
-# CLUSTER->JOB FINISHED??
-# CLUSTER == lista CPUS Z (start+time_limit, job)
-# I SORTOWAC PO END TIMACH ZEBY WIEDZIEC KIEDY SIE CPU ZWOLNIA
-# CLUSTER->TEST_JOB_RUNNABLE -> czy free_cpu <= job.prc LUB max(node.free) <= job.proc
-
-		#TODO backfilling
-		# if still left free and not empty waiting -> self._backfill()
+		# cleanup
+		self._manager.clear_reservations()
 
 	def _new_job_event(self, job):
 		"""
@@ -379,6 +399,7 @@ class Simulator(object):
 		job.execution_ended(self._now)
 		self._manager.job_ended(job)
 		self._cpu_used -= job.proc
+		assert self._cpu_used >= 0, 'invalid cpu count'
 
 	def _estimate_end_event(self, job):
 		"""
@@ -415,7 +436,7 @@ class Simulator(object):
 			# During the campaign estimations we aren't removing
 			# the old `campaign_end` events present in the queue,
 			# so it is possible that this event is out of order.
-			debug_print("Skipping camp_end event", camp.ID, user.ID)
+			debug_print('Skipping camp_end event', camp.ID, user.ID)
 			return
 
 		while user.active_camps and not user.active_camps[0].time_left:

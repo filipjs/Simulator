@@ -239,7 +239,7 @@ class BaseManager(object):
 		it = self._space_list
 
 		while it.end < last_space_end:
-			assert not it.reserved, 'reservations not removed'
+			assert not it.reserved.size, 'reservations not removed'
 			it.avail.add(job.res)
 			it = it.next
 
@@ -251,7 +251,7 @@ class BaseManager(object):
 			it.end = it.next.end
 			it.avail = it.next.avail
 			it.reserved = it.next.reserved
-			assert not it.reserved, 'reservations not removed'
+			assert not it.reserved.size, 'reservations not removed'
 			it.next = it.next.next
 			it.job_last_space = it.next.job_last_space
 			it.next.next = None  # garbage collection
