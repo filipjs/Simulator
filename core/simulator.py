@@ -4,7 +4,7 @@ import itertools
 import math
 from functools import partial
 import cluster_managers
-from util import debug_print
+from util import debug_print, delta
 
 
 # set up debug level for this module
@@ -136,7 +136,7 @@ class Simulator(object):
 		#   the queue to force the calculations in case the gap
 		#   between consecutive events would be too long.
 		self._decay_factor = 1 - (0.693 / self._settings.decay)
-		self._force_period = 6000000
+		self._force_period = 60 * 5
 
 		sub_iter = 0
 		sub_total = len(self._future_jobs)
@@ -160,7 +160,8 @@ class Simulator(object):
 			# the queue cannot be empty here
 			self._now, event, entity = self._pq.pop()
 
-			debug_print('Time', self._now, 'event', event)
+			if event != Events.force_decay:
+				debug_print('Time', delta(self._now), 'event', event)
 
 			# Process the time skipped between events
 			# before changing the state of the system.
@@ -378,10 +379,10 @@ class Simulator(object):
 						Events.estimate_end,
 						job
 					)
-				debug_print('Started job', job, 'backfill:', bf_mode)
+				debug_print('Started', job, 'bf == ', bf_mode)
 			else:
 				bf_mode = True
-				debug_print('Reserved job', job)
+				debug_print('Reserved', job)
 
 			# go to next job by priority
 			prio_iter -= 1

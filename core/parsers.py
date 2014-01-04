@@ -90,10 +90,10 @@ class BaseParser(object):
 		"""
 		Default implementation, requires a `self.fields`.
 
-		Create `stats` from line by splitting and extracting
-		appropriate values.
+		Create `stats` from the line by splitting and extracting
+		the appropriate values.
 
-		You can override this method in subclasses if parsing
+		You can override this method in a subclass if parsing
 		the line requires more complex logic.
 		"""
 		values = map(int, line.split())
@@ -191,8 +191,7 @@ class SWFParser(BaseParser):
 
 	def _accept(self, line, num):
 		if line[0] == ';':
-			 # skip comments
-			return False
+			return False  # skip comments
 		return True
 
 

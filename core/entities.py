@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import datetime
+from util import delta
 
 
 class ReadOnlyAttr(object):
@@ -131,9 +131,10 @@ class Job(object):
 
 	def __repr__(self):
 		end = self._start and self._start + self.run_time
-		return 'Job {} [sub {} st {} end {} run {} limit {} proc {}]'.format(
-			self.ID, self.submit, self._start, end,
-			self.run_time, self.time_limit, self.proc)
+		s = 'Job {} [{} -> {} -> {} : run {} limit {} proc {}]'
+		return s.format(self.ID, delta(self.submit), delta(self._start),
+			delta(end), delta(self.run_time), delta(self.time_limit),
+			self.proc)
 
 
 class Campaign(object):
@@ -214,8 +215,9 @@ class Campaign(object):
 		self._remaining += new_value * job.proc
 
 	def __repr__(self):
-		return 'Camp {} {} [work {} left {} act {} comp {}]'.format(
-			self.ID, self.user.ID, self.workload, self.time_left,
+		s = 'Camp {} {} [created {} work {} left {} : jobs {} {}]'
+		return s.format(self.ID, self.user.ID, delta(self.created),
+			delta(self.workload), delta(self.time_left),
 			len(self.active_jobs), len(self.completed_jobs))
 
 
@@ -335,6 +337,6 @@ class User(object):
 		return new_camp
 
 	def __repr__(self):
-		return 'User {} [usage {} act {} comp {}]'.format(
-			self.ID, self.cpu_clock_used,
+		s = 'User {} [usage {} : camps {} {}]'
+		return s.format(self.ID, self.cpu_clock_used,
 			len(self.active_camps), len(self.completed_camps))

@@ -2,7 +2,7 @@
 import copy
 from abc import ABCMeta, abstractmethod, abstractproperty
 from functools import partial
-from util import debug_print
+from util import debug_print, delta
 
 
 # set up debug level for this module
@@ -33,9 +33,11 @@ class _NodeSpace(object):
 		return self.end - self.begin
 
 	def __repr__(self):
-		return '<{}, {}> last {}\navail {}\nres {}'.format(
-			self.begin, self.end, self.job_last_space,
-			self.avail, self.reserved)
+		pad = ' ' * 18
+		s = '[{}, {}] last {}\n{pad}avail {}\n{pad}rsrvd {}'
+		return s.format(delta(self.begin), delta(self.end),
+			self.job_last_space, self.avail, self.reserved,
+			pad=pad)
 
 
 class _BaseNodeMap(object):
@@ -101,7 +103,7 @@ class BaseManager(object):
 		debug_print(*args)
 		it = self._space_list
 		while it is not None:
-			print it
+			debug_print(it)
 			it = it.next
 
 	def sanity_test(self, job):
@@ -221,7 +223,7 @@ class BaseManager(object):
 			it = it.next
 		# debug info
 		if DEBUG_FLAG:
-			self._dump_space('Added job', job)
+			self._dump_space('Added resources', job)
 		return can_run
 
 	def clear_reservations(self):
@@ -283,7 +285,7 @@ class BaseManager(object):
 		del job.res
 		# debug info
 		if DEBUG_FLAG:
-			self._dump_space('Removed job resources', job, last_space_end)
+			self._dump_space('Removed resources', job)
 
 
 class _SingletonNodeMap(_BaseNodeMap):
