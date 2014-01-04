@@ -128,6 +128,12 @@ class Job(object):
 		self.user.job_next_estimate(self, value)
 		self.estimate = value
 
+	def __repr__(self):
+		return 'Job {} [sub {} st {} end {} run {} limit {}]'.format(
+			self.ID, self.submit, self.start_time, self.end_time,
+			self.run_time, self.time_limit)
+
+
 class Campaign(object):
 	"""
 	A single user campaign.
@@ -205,6 +211,11 @@ class Campaign(object):
 		self._remaining -= job.estimate * job.proc
 		self._remaining += new_value * job.proc
 
+	def __repr__(self):
+		return 'Camp {} {} [work {} left {} act {} comp {}]'.format(
+			self.ID, self.user.ID, self.workload, self.time_left,
+			len(self.active_jobs), len(self.completed_jobs))
+
 
 class User(object):
 	"""
@@ -229,8 +240,8 @@ class User(object):
 		self._global_count = 0
 
 	def reset(self):
-		self._lost_virtual = 0
 		self._virt_pool = 0
+		self.lost_virtual = 0
 		self.last_active = None
 		self.false_inactivity = 0
 		self._cpu_clock_used = 0
@@ -274,7 +285,7 @@ class User(object):
 			offset += camp.time_left
 		# overflow from total is lost
 		self._virt_pool = 0
-		self._lost_virtual += total
+		self.lost_virtual += total
 
 	def real_work(self, value, real_decay):
 		"""
@@ -296,7 +307,7 @@ class User(object):
 		self._occupied_cpus -= job.proc
 		self.active_jobs.remove(job)
 		self.completed_jobs.append(job)
-		# The job predicted run time could be higher than the
+		# The job estimated run time could be higher than the
 		# real run time, so we need redistribute the difference.
 		diff = (job.estimate - job.run_time) * job.proc
 		job.camp._virtual -= diff
@@ -320,3 +331,8 @@ class User(object):
 		self._global_count += 1
 		self.active_camps.append(new_camp)
 		return new_camp
+
+	def __repr__(self):
+		return 'User {} [usage {} act {} comp {}]'.format(
+			self.ID, self.cpu_clock_used,
+			len(self.active_camps), len(self.completed_camps))

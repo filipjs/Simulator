@@ -144,6 +144,7 @@ class Simulator(object):
 
 		virt_second = False
 		schedule = False
+		campaigns = False
 
 		while sub_iter < sub_total or not self._pq.empty():
 			# We only need to keep two `new_job` events in the
@@ -168,21 +169,18 @@ class Simulator(object):
 				virt_second = self._virt_first_stage(diff, event)
 				self._real_first_stage(diff, event)
 
-# TODO lista -> <time, utility>
-# TODO printy eventow aka job end,
-# TODO i jednak camp start??? bo utility wtedy
-
 			if event == Events.new_job:
 				self._new_job_event(entity)
 				sub_count -= 1
-				schedule = True
+				schedule = campaigns = True
 			elif event == Events.job_end:
 				self._job_end_event(entity)
-				schedule = True
+				schedule = campaigns = True
 			elif event == Events.estimate_end:
 				self._estimate_end_event(entity)
+				campaigns = True
 			elif event == Events.campaign_end:
-				self._camp_end_event(entity)
+				campaigns = self._camp_end_event(entity)
 			elif event == Events.force_decay:
 				pass
 			else:
@@ -207,14 +205,14 @@ class Simulator(object):
 			if schedule:
 				self._schedule()
 				schedule = False
+				self._print_utility()  # add results
 
-			# Don't update on `force_decay`, no changes
-			# were made that influence campaign estimates.
-			if event != Events.force_decay:
+			if campaigns:
 				self._update_camp_estimates()
+				campaigns = False
 
-			# If now the queue is empty, the simulation has ended.
-			# We need to stop an infinite loop of `force_decay` events.
+			# If the queue is empty here, the simulation has ended.
+			# We need to stop the infinite loop of `force_decay` events.
 			if not self._pq.empty():
 				self._force_next_decay()
 
@@ -236,44 +234,44 @@ class Simulator(object):
 
 	def _virt_first_stage(self, period, event):
 		"""
-		...TODO
-		Distribute the virtual time to active users.
+		In the first stage we just distribute the virtual time
+		for the period to active users.
 
 		Return if `_virtual_second_stage` is needed.
 		"""
-		print 'virt first', event
 		for u in self._users.itervalues():
 			if u.active:
 				u.add_virtual(period * self._share_value(u))
+
 		if event < Events.campaign_end:
 			return True
 		elif event == Events.campaign_end:
+			# need it right away
 			self._virt_second_stage()
 		return False
 
 	def _virt_second_stage(self):
 		"""
-		...TODO
-		Redistribute the accumulated virtual time.
+		In the second stage users individually redistribute
+		the accumulated virtual time.
 		"""
-		print 'virt second'
 		for u in self._users.itervalues():
 			if u.active:
 				u.virtual_work()
 
 	def _real_first_stage(self, period, event):
 		"""
-		...TODO
-		Update the real work done by the jobs.
-		This also applies the rolling decay to each user usage.
+		Update the real work done by the jobs in the period
+		and apply the rolling decay.
+
+		This is currently the only stage.
 		"""
-		print 'real first'
-		# calculate the decay for the period
+		# calculate the decay factor for the period
 		real_decay = self._decay_factor ** period
 		# update global statistics
 		self._total_usage += self._cpu_used * period
 		self._total_usage *= real_decay
-		# and process the period by the users
+		# and update users usage
 		for u in self._users.itervalues():
 			u.real_work(period, real_decay)
 
@@ -286,6 +284,18 @@ class Simulator(object):
 		cpus = max(self._cpu_used, 1)
 		return share * cpus
 
+	def _queue_camp_end(self, camp):
+		"""
+		Create the `campaign_end` event and insert it to the queue.
+		"""
+		est = (camp.time_left + camp.offset) / self._share_value(u)
+		est = self._now + int(math.ceil(est))  # must be int
+		self._pq.add(
+			est,
+			Events.campaign_end,
+			camp
+		)
+
 	def _update_camp_estimates(self):
 		"""
 		Update estimated campaign end times in the virtual schedule.
@@ -294,14 +304,7 @@ class Simulator(object):
 		"""
 		for u in self._users.itervalues():
 			if u.active:
-				first_camp = u.active_camps[0]
-				est = first_camp.time_left / self._share_value(u)
-				est = self._now + int(math.ceil(est))  # must be int
-				self._pq.add(
-					est,
-					Events.campaign_end,
-					first_camp
-				)
+				self._queue_camp_end(u.active_camps[0])
 
 	def _force_next_decay(self):
 		"""
@@ -375,11 +378,10 @@ class Simulator(object):
 						Events.estimate_end,
 						job
 					)
-				debug_print('Executed job', job.ID, job.run_time,
-					'backfill:', bf_mode)
+				debug_print('Started job', job, 'backfill:', bf_mode)
 			else:
 				bf_mode = True
-				debug_print('Reserved job', job.ID, job.run_time)
+				debug_print('Reserved job', job)
 
 			# go to next job by priority
 			prio_iter -= 1
@@ -407,7 +409,7 @@ class Simulator(object):
 
 		if camp is None:
 			camp = user.create_campaign(self._now)
-			#TODO print <camp start event> aka utility
+			self._print_camp_created(camp)  # add results
 
 		camp.add_job(job)
 		user.add_job(job)
@@ -423,6 +425,7 @@ class Simulator(object):
 		self._manager.job_ended(job)
 		self._cpu_used -= job.proc
 		assert self._cpu_used >= 0, 'invalid cpu count'
+		self._print_job_ended(job)  # add results
 
 	def _estimate_end_event(self, job):
 		"""
@@ -432,7 +435,7 @@ class Simulator(object):
 		user = job.user
 
 		if not user.active:
-			# user became inactive due to an inaccurate estimate
+			# user became inactive due to an inaccurate estimates
 			user.false_inactivity += (self._now - user.last_active)
 			self._active_shares += user.shares
 
@@ -451,15 +454,17 @@ class Simulator(object):
 		"""
 		Remove the campaigns that ended in the virtual schedule.
 		Update the owner activity status.
+
+		Return if the `_update_camp_estimates` call is needed.
 		"""
 		assert not camp.time_left, 'campaign still active'
 		user = camp.user
 
 		if not user.active_camps or camp != user.active_camps[0]:
-			# During the campaign estimations we aren't removing
-			# the old `campaign_end` events present in the queue,
+			# In the `_update_camp_estimates` we aren't removing
+			# the old `campaign_end` events from the queue,
 			# so it is possible that this event is out of order.
-			debug_print('Skipping camp_end event', camp.ID, user.ID)
+			debug_print('Skipping campaign_end event', camp)
 			return
 
 		while user.active_camps and not user.active_camps[0].time_left:
@@ -471,7 +476,24 @@ class Simulator(object):
 			# user became inactive
 			user.last_active = self._now
 			self._active_shares -= user.shares
-		#TODO JESLI ZA WOLNO DZIALA, TUTAJ MOZNA RECZNIE DODAWAC POJEDYNCZA KAMPANIE
-		#TODO JESLI USER JEST DALEJ ACTIVE : ZMIANA SHARES -> PRZELICZYC ALL
+			# we need new estimates, because shares changed
+			return True
+		else:
+			self._queue_camp_end(user.active_camps[0])
+			# shares still the same
+			return False
 
-#TODO collections.deque() MOZNA PODMIENIC USER>ACTIVE CAMPS (ALE NIE COMPLETED BO POTRZEBA SLICES)
+	def _print_utility(self):
+		"""
+		"""
+		pass
+
+	def _print_camp_created(self):
+		"""
+		"""
+		pass
+
+	def _print_job_ended(self):
+		"""
+		"""
+		pass

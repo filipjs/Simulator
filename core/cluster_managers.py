@@ -6,13 +6,12 @@ from util import debug_print
 
 
 # set up debug level for this module
-DEBUG_FLAG = False #__debug__
+DEBUG_FLAG = __debug__
 debug_print = partial(debug_print, DEBUG_FLAG, __name__)
 
 
 """
-
-
+#TODO OPIS
 """
 
 
@@ -34,7 +33,7 @@ class _NodeSpace(object):
 		return self.end - self.begin
 
 	def __repr__(self):
-		return "<{}, {}> last {}\navail {}\nres {}".format(
+		return '<{}, {}> last {}\navail {}\nres {}'.format(
 			self.begin, self.end, self.job_last_space,
 			self.avail, self.reserved)
 
@@ -222,7 +221,7 @@ class BaseManager(object):
 			it = it.next
 		# debug info
 		if DEBUG_FLAG:
-			self._dump_space('Added job', job.ID, job.time_limit)
+			self._dump_space('Added job', job)
 		return can_run
 
 	def clear_reservations(self):
@@ -284,7 +283,7 @@ class BaseManager(object):
 		del job.res
 		# debug info
 		if DEBUG_FLAG:
-			self._dump_space('Removed job', job.ID, last_space_end)
+			self._dump_space('Removed job resources', job, last_space_end)
 
 
 class _SingletonNodeMap(_BaseNodeMap):
@@ -314,7 +313,7 @@ class _SingletonNodeMap(_BaseNodeMap):
 		return self._cpus
 
 	def __repr__(self):
-		return "CPU count: {}".format(self._cpus)
+		return 'CPU count: {}'.format(self._cpus)
 
 
 class SingletonManager(BaseManager):
