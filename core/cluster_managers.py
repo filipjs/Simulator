@@ -6,8 +6,8 @@ from util import debug_print
 
 
 # set up debug level for this module
-DEBUG_FLAG = __debug__
-debug_print = partial(debug_print, flag=DEBUG_FLAG, name=__name__)
+DEBUG_FLAG = False #__debug__
+debug_print = partial(debug_print, DEBUG_FLAG, __name__)
 
 
 """
@@ -32,6 +32,11 @@ class _NodeSpace(object):
 	@property
 	def length(self):
 		return self.end - self.begin
+
+	def __repr__(self):
+		return "<{}, {}> last {}\navail {}\nres {}".format(
+			self.begin, self.end, self.job_last_space,
+			self.avail, self.reserved)
 
 
 class _BaseNodeMap(object):
@@ -89,6 +94,16 @@ class BaseManager(object):
 		self._node_count = len(nodes)
 		self._max_cpu_per_node = nodes[0]
 		self._cpu_limit = sum(nodes.itervalues())
+
+	def _dump_space(self, *args):
+		"""
+		Print the current state of node spaces.
+		"""
+		debug_print(*args)
+		it = self._space_list
+		while it is not None:
+			print it
+			it = it.next
 
 	def sanity_test(self, job):
 		"""
@@ -195,6 +210,7 @@ class BaseManager(object):
 			job.res = res
 		else:
 			self._reservations += 1
+
 		# update the available nodes in all spaces
 		it = first
 		while True:
@@ -204,6 +220,9 @@ class BaseManager(object):
 			if it == last:
 				break
 			it = it.next
+		# debug info
+		if DEBUG_FLAG:
+			self._dump_space('Added job', job.ID, job.time_limit)
 		return can_run
 
 	def clear_reservations(self):
@@ -226,6 +245,9 @@ class BaseManager(object):
 				it.avail.add(it.reserved)
 				it.reserved.clear()
 				prev, it = it, it.next
+		# debug info
+		if DEBUG_FLAG:
+			self._dump_space('Cleared reservations')
 
 	def job_ended(self, job):
 		"""
@@ -252,14 +274,17 @@ class BaseManager(object):
 			it.avail = it.next.avail
 			it.reserved = it.next.reserved
 			assert not it.reserved.size, 'reservations not removed'
-			it.next = it.next.next
 			it.job_last_space = it.next.job_last_space
-			it.next.next = None  # garbage collection
+			# move 'pointers' as the last step
+			it.next = it.next.next
 		else:
 			it.avail.add(job.res)
 			it.job_last_space -= 1
 		# finally clear
 		del job.res
+		# debug info
+		if DEBUG_FLAG:
+			self._dump_space('Removed job', job.ID, last_space_end)
 
 
 class _SingletonNodeMap(_BaseNodeMap):
@@ -284,6 +309,7 @@ class _SingletonNodeMap(_BaseNodeMap):
 	def clear(self):
 		self._cpus = 0
 
+	@property
 	def size(self):
 		return self._cpus
 

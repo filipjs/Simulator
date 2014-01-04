@@ -9,7 +9,7 @@ from util import debug_print
 
 # set up debug level for this module
 DEBUG_FLAG = __debug__
-debug_print = partial(debug_print, flag=DEBUG_FLAG, name=__name__)
+debug_print = partial(debug_print, DEBUG_FLAG, __name__)
 
 
 class Events(object):
@@ -136,13 +136,13 @@ class Simulator(object):
 		#   the queue to force the calculations in case the gap
 		#   between consecutive events would be too long.
 		self._decay_factor = 1 - (0.693 / self._settings.decay)
-		self._force_period = 60
+		self._force_period = 6000000
 
 		sub_iter = 0
 		sub_total = len(self._future_jobs)
 		sub_count = 0
 
-		second_stage = False
+		virt_second = False
 		schedule = False
 
 		while sub_iter < sub_total or not self._pq.empty():
@@ -159,18 +159,14 @@ class Simulator(object):
 			# the queue cannot be empty here
 			self._now, event, entity = self._pq.pop()
 
+			debug_print('Time', self._now, 'event', event)
+
 			# Process the time skipped between events
 			# before changing the state of the system.
 			diff = self._now - prev_event
 			if diff:
-				self._distribute_virtual(diff)
-				second_stage = True
-				# calculate the decay for the period
-				real_decay = self._decay_factor ** diff
-				self._process_real(diff, real_decay)
-				# update global statistics
-				self._total_usage += self._cpu_used * diff
-				self._total_usage *= real_decay
+				virt_second = self._virt_first_stage(diff, event)
+				self._real_first_stage(diff, event)
 
 # TODO lista -> <time, utility>
 # TODO printy eventow aka job end,
@@ -204,9 +200,9 @@ class Simulator(object):
 				    next_event < Events.campaign_end):
 					continue
 
-			if second_stage:
-				self._process_virtual()
-				second_stage = False
+			if virt_second:
+				self._virt_second_stage()
+				virt_second = False
 
 			if schedule:
 				self._schedule()
@@ -238,6 +234,49 @@ class Simulator(object):
 
 		return self._results
 
+	def _virt_first_stage(self, period, event):
+		"""
+		...TODO
+		Distribute the virtual time to active users.
+
+		Return if `_virtual_second_stage` is needed.
+		"""
+		print 'virt first', event
+		for u in self._users.itervalues():
+			if u.active:
+				u.add_virtual(period * self._share_value(u))
+		if event < Events.campaign_end:
+			return True
+		elif event == Events.campaign_end:
+			self._virt_second_stage()
+		return False
+
+	def _virt_second_stage(self):
+		"""
+		...TODO
+		Redistribute the accumulated virtual time.
+		"""
+		print 'virt second'
+		for u in self._users.itervalues():
+			if u.active:
+				u.virtual_work()
+
+	def _real_first_stage(self, period, event):
+		"""
+		...TODO
+		Update the real work done by the jobs.
+		This also applies the rolling decay to each user usage.
+		"""
+		print 'real first'
+		# calculate the decay for the period
+		real_decay = self._decay_factor ** period
+		# update global statistics
+		self._total_usage += self._cpu_used * period
+		self._total_usage *= real_decay
+		# and process the period by the users
+		for u in self._users.itervalues():
+			u.real_work(period, real_decay)
+
 	def _share_value(self, user):
 		"""
 		Calculate the user share of the available resources.
@@ -246,30 +285,6 @@ class Simulator(object):
 		# this will guarantee that the campaigns will eventually end
 		cpus = max(self._cpu_used, 1)
 		return share * cpus
-
-	def _distribute_virtual(self, period):
-		"""
-		Distribute the virtual time to active users.
-		"""
-		for u in self._users.itervalues():
-			if u.active:
-				u.set_virtual(period * self._share_value(u))
-
-	def _process_virtual(self):
-		"""
-		Redistribute the accumulated virtual time.
-		"""
-		for u in self._users.itervalues():
-			if u.active:
-				u.virtual_work()
-
-	def _process_real(self, period, real_decay):
-		"""
-		Update the real work done by the jobs.
-		This also applies the rolling decay to each user usage.
-		"""
-		for u in self._users.itervalues():
-			u.real_work(period, real_decay)
 
 	def _update_camp_estimates(self):
 		"""
@@ -360,10 +375,12 @@ class Simulator(object):
 						Events.estimate_end,
 						job
 					)
-				debug_print('Scheduled job:', job.ID, job.run_time,
+				debug_print('Executed job', job.ID, job.run_time,
 					'backfill:', bf_mode)
 			else:
 				bf_mode = True
+				debug_print('Reserved job', job.ID, job.run_time)
+
 			# go to next job by priority
 			prio_iter -= 1
 			# stop if the backfilling checked enough jobs

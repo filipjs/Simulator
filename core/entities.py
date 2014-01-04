@@ -252,13 +252,12 @@ class User(object):
 	def cpu_clock_used(self):
 		return round(self._cpu_clock_used, 3)
 
-	def set_virtual(self, value):
+	def add_virtual(self, value):
 		"""
-		Set the `value` long period as the virtual pool,
+		Add the `value` long period to the virtual pool,
 		which will be processed in next `virtual_work` call.
 		"""
-		assert not self._virt_pool, 'virtual pool not redistributed'
-		self._virt_pool = value
+		self._virt_pool += value
 
 	def virtual_work(self):
 		"""

@@ -179,12 +179,17 @@ def run(workload, args):
 			     sim_conf.block_margin)
 
 	for sched in part_conf.schedulers:
+		print 'Simulating:', sched.__class__.__name__
+
 		# set the current scheduler
 		part_conf.scheduler = sched
 
 		for b in blocks:
+			print 'Block:', b
+
 			# block includes both ends
 			job_slice = jobs[b['left']:b['right']+1]
+
 			# calculate the CPU number
 			if sim_conf.cpu_count:
 				cpus = sim_conf.cpu_count
@@ -208,6 +213,7 @@ def run(workload, args):
 				users_slice[j.user.ID] = j.user
 			for u in users_slice.itervalues():
 				u.reset()
+
 			# run the simulation
 			my_simulator = simulator.Simulator(job_slice, users_slice,
 							   nodes, alg_conf, part_conf)
@@ -217,6 +223,8 @@ def run(workload, args):
 
 			if sim_conf.one_block:
 				break
+
+		print '-' * 30
 
 #first_sub = jobs[b['first']].submit
 #last_sub = jobs[b['last']].submit
