@@ -288,7 +288,7 @@ class Simulator(object):
 		"""
 		Create the `campaign_end` event and insert it to the queue.
 		"""
-		est = (camp.time_left + camp.offset) / self._share_value(u)
+		est = (camp.time_left + camp.offset) / self._share_value(camp.user)
 		est = self._now + int(math.ceil(est))  # must be int
 		self._pq.add(
 			est,
@@ -435,7 +435,7 @@ class Simulator(object):
 		user = job.user
 
 		if not user.active:
-			# user became inactive due to an inaccurate estimates
+			# user became inactive due to inaccurate estimates
 			user.false_inactivity += (self._now - user.last_active)
 			self._active_shares += user.shares
 
@@ -488,12 +488,12 @@ class Simulator(object):
 		"""
 		pass
 
-	def _print_camp_created(self):
+	def _print_camp_created(self, camp):
 		"""
 		"""
 		pass
 
-	def _print_job_ended(self):
+	def _print_job_ended(self, job):
 		"""
 		"""
 		pass

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import datetime
 
 
 class ReadOnlyAttr(object):
@@ -70,7 +71,7 @@ class Job(object):
 
 	@property
 	def ID(self):
-		return self._stats['id']
+		return self._stats['job_id']
 
 	@property
 	def user(self):
@@ -129,9 +130,10 @@ class Job(object):
 		self.estimate = value
 
 	def __repr__(self):
-		return 'Job {} [sub {} st {} end {} run {} limit {}]'.format(
-			self.ID, self.submit, self.start_time, self.end_time,
-			self.run_time, self.time_limit)
+		end = self._start and self._start + self.run_time
+		return 'Job {} [sub {} st {} end {} run {} limit {} proc {}]'.format(
+			self.ID, self.submit, self._start, end,
+			self.run_time, self.time_limit, self.proc)
 
 
 class Campaign(object):

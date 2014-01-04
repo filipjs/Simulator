@@ -60,7 +60,7 @@ class OStrich(BaseScheduler):
 		Inside campaigns order by shorter run time estimate.
 		In case of ties order by earlier submit.
 		"""
-		return (job.estimate, job.submit)
+		return (job.estimate, job.submit, job.ID)
 
 	def job_priority_key(self, job):
 		"""
@@ -106,4 +106,4 @@ class SlurmFairshare(BaseScheduler):
 			effective = job.user.cpu_clock_used / self._stats['total_usage']
 			fairshare = 2.0 ** -(effective / job.user.shares)
 		prio = int(fairshare * 100000)
-		return (-prio, job.submit)
+		return (-prio, job.submit, job.ID)

@@ -316,7 +316,7 @@ def arguments_from_templates(parser, templates):
 			print 'WARNING: not a boolean value:', v
 			print 'Setting the value to False'
 		return v.lower() == 'true'
-
+#TODO ZROBIC FUNKCJE INT CO ERROR GDY UJEMNA WARTOSC!!!!!!
 	for temp in templates:
 		assert temp.default is not None, 'invalid default value'
 
