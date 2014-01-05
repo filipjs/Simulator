@@ -51,8 +51,6 @@ class Job(object):
 	"""
 
 	time_limit = ReadOnlyAttr()
-	nodes = ReadOnlyAttr()
-	pn_cpus = ReadOnlyAttr()
 	camp = ReadOnlyAttr()
 
 	def __init__(self, stats, user):
@@ -69,6 +67,26 @@ class Job(object):
 		self._completed = False
 		self.estimate = None
 
+	def validate_configuration(self):
+		"""
+		Check and possibly correct the job's configuration
+		of nodes and CPUs.
+		"""
+		if not job.nodes and not job.pn_cpus:
+			# feature turned off, OK
+			return
+		if job.nodes and not job.pn_cpus:
+			job._stats['pn_cpus'] = int(math.ceil(job.proc / job.nodes))
+		if not job.nodes and job.pn_cpus:
+			job._stats['nodes'] = int(math.ceil(job.proc / job.pn_cpus))
+		assert job.nodes > 0 and job.pn_cpus > 0, 'invalid configuration'
+		total = job.nodes * job.pn_cpus
+		if total != job.proc:
+			err = 'WARNING: Job {}: changing `job.proc` from {} to {}'
+			print err.format(self.ID, self.proc, total)
+			self._stats['proc'] = total
+		assert job.proc > 0, 'invalid proc'
+
 	@property
 	def ID(self):
 		return self._stats['job_id']
@@ -80,6 +98,14 @@ class Job(object):
 	@property
 	def proc(self):
 		return self._stats['proc']
+
+	@property
+	def nodes(self):
+		return self._stats['nodes']
+
+	@property
+	def pn_cpus(self):
+		return self._stats['pn_cpus']
 
 	@property
 	def submit(self):

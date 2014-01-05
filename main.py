@@ -166,10 +166,11 @@ def run(workload, args):
 	jobs, users = parser.parse_workload(workload, sim_conf.serial)
 	jobs.sort(key=lambda j: j.submit)  # order by submit time
 
-	# calculate the missing values
+	# set the missing values
 	for j in jobs:
 		j.time_limit = part_conf.submitter.time_limit(j)
-		j.nodes, j.pn_cpus = part_conf.submitter.config(j)
+		part_conf.submitter.modify_configuration(j)
+		j.validate_configuration()
 
 	for u in users.itervalues():
 		u.shares = part_conf.share.user_share(u)

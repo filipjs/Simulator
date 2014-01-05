@@ -12,7 +12,7 @@ def debug_print(flag, module, *args):
 
 def delta(seconds):
 	"""
-	Return a nicer representation of a time string.
+	Return a nicer representation of a deltatime value.
 	"""
 	if seconds is None:
 		return '()'

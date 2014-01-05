@@ -19,7 +19,7 @@ class BaseSubmitter(object):
 	Submitters base class. Subclasses are required to override:
 
 	1) _get_limit
-	2) (optionally) _get_nodes
+	2) (optionally) modify_configuration
 
 	You can access the `Settings` using `self._settings`.
 	"""
@@ -52,35 +52,19 @@ class BaseSubmitter(object):
 		"""
 		raise NotImplemented
 
-	def config(self, job):
+	def modify_configuration(self, job):
 		"""
-		Public wrapper method.
-		Run and check the correctness of `_get_nodes`.
-		"""
-		nodes = self._get_nodes(job)
-		assert job.nodes is None, 'nodes already set'
-		assert job.pn_cpus is None, 'cpu per node already set'
-		if nodes:
-			pn_cpus = job.proc / nodes
-			assert nodes * pn_cpus == job.proc, 'invalid configuration'
-		else:
-			pn_cpus = 0
-		return nodes, pn_cpus
+		Override this if you want to change the job node configuration.
 
-	def _get_nodes(self, job):
-		"""
-		Specify the number of nodes to run the job on.
-
-		The default implementation return `0` as a sign to
-		turn the feature off.
+		For example you do not want to alter your workload file but still
+		want to use this feature and you prepared some static rules to
+		determine the `nodes` and/or `pn_cpus` values.
 
 		Note:
-		  **DO NOT** set the `job.nodes` or `job.pn_cpus` yourself.
-
-		  In rare cases you can modify the `job.proc` if you feel
-		  that otherwise there isn't a valid configuration.
+		  You have to accordingly modify the job internal attributes
+		  `job._stats['nodes']` and/or `job._stats['pn_cpus'].
 		"""
-		return 0
+		pass
 
 
 class OracleSubmitter(BaseSubmitter):

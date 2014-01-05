@@ -33,7 +33,7 @@ class _NodeSpace(object):
 		return self.end - self.begin
 
 	def __repr__(self):
-		pad = ' ' * 18
+		pad = ' ' * 22
 		s = '[{}, {}] last {}\n{pad}avail {}\n{pad}rsrvd {}'
 		return s.format(delta(self.begin), delta(self.end),
 			self.job_last_space, self.avail, self.reserved,
@@ -103,7 +103,7 @@ class BaseManager(object):
 		debug_print(*args)
 		it = self._space_list
 		while it is not None:
-			debug_print(it)
+			print '{:20}{}'.format(' ', it)
 			it = it.next
 
 	def sanity_test(self, job):
