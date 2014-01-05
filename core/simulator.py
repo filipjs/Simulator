@@ -8,7 +8,7 @@ from util import debug_print, delta
 
 
 # set up debug level for this module
-DEBUG_FLAG = __debug__
+DEBUG_FLAG = False #__debug__
 debug_print = functools.partial(debug_print, DEBUG_FLAG, __name__)
 
 
@@ -147,6 +147,7 @@ class Simulator(object):
 		schedule = False
 		campaigns = False
 
+		forced_count = 0 #TODO DELETE
 		while sub_iter < sub_total or not self._pq.empty():
 			# We only need to keep two `new_job` events in the
 			# queue at the same time (one to process, one to peek).
@@ -158,6 +159,8 @@ class Simulator(object):
 				)
 				sub_iter += 1
 				sub_count += 1
+				if sub_iter % 1000 == 0: #TODO DELETE
+					print "WORKING NOW: JOB", sub_iter, forced_count
 			# the queue cannot be empty here
 			self._now, event, entity = self._pq.pop()
 
@@ -185,6 +188,7 @@ class Simulator(object):
 				campaigns = self._camp_end_event(entity)
 			elif event == Events.force_decay:
 				pass
+				forced_count += 1 #TODO DELETE
 			else:
 				raise Exception('unknown event')
 
@@ -229,14 +233,9 @@ class Simulator(object):
 				self._print_camp_ended(c)
 			assert not u.active_camps, 'active campaigns'
 			assert not u.active_jobs, 'active jobs'
-			if DEBUG_FLAG:
-				total_camps = reduce(lambda x, y: x + y.workload,
-						     u.completed_camps, 0)
-				total_jobs = reduce(lambda x, y: x + y.run_time * y.proc,
-						    u.completed_jobs, 0)
-				assert total_camps == total_jobs, 'invalid workload'
 			self._print_user_stats(u)
 		# return everything
+		print "FORCED COUNT", forced_count
 		return self._results
 
 	def _virt_first_stage(self, period, event):
@@ -411,7 +410,10 @@ class Simulator(object):
 		"""
 		Add the job to a campaign. Update the owner activity status.
 		"""
-		assert self._manager.sanity_test(job), 'job can never run'
+		if not self._manager.sanity_test(job):
+			#TODO PRINT MA BYC
+			#print 'WARNING: job', job.ID, 'can never run'
+			return
 		user = job.user
 
 		if not user.active:

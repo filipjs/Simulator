@@ -76,7 +76,7 @@ part_templates = [
 ]
 
 sim_templates = [
-	Template('title', 'The title of the simulation', 'title'),
+	Template('title', 'The title of the simulation', 'my_title'),
 	Template('job_id', 'Start from the job with this ID', 0),
 	Template('block_time', 'Divide the simulation in `block_time`'
 		 ' long parts', 0, 'DAYS'),

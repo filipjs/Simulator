@@ -127,12 +127,10 @@ def make_classes(name, conf, modules=[]):
 
 	"""
 	if not modules:
-		package = 'parts'
-		os.chdir(package)
-		for f in glob.glob('*.py'):
-			m = importlib.import_module(package + '.' + f[:-3])
+		for f in glob.glob('parts/*.py'):
+			m = f.replace('/', '.')[:-3]
+			m = importlib.import_module(m)
 			modules.append(m)
-		os.chdir('..')
 
 	if isinstance(name, list):
 		return [make_classes(n, conf) for n in name]
@@ -156,6 +154,11 @@ def run(workload, args):
 	sim_conf = settings.Settings(settings.sim_templates, **args)
 	alg_conf = settings.Settings(settings.alg_templates, **args)
 	part_conf = settings.Settings(settings.part_templates, **args)
+
+	# before we start, check the output directory
+	if not os.path.isdir(sim_conf.output):
+		print 'ERROR: invalid output directory', sim_conf.output
+		sys.exit(1)
 
 	# now we need to load and instantiate the classes from `part_conf`
 	for key, value in part_conf.__dict__.items():
@@ -191,11 +194,9 @@ def run(workload, args):
 
 		# set the current scheduler
 		part_conf.scheduler = sched
+		full_results = []
 
 		for b in blocks:
-			sim_start = time.time()  # timer
-			print 'Current block:', b
-
 			# block includes both ends
 			job_slice = jobs[b['left']:b['right']+1]
 			# get the boundaries
@@ -225,23 +226,32 @@ def run(workload, args):
 			for u in users_slice.itervalues():
 				u.reset()
 
+			sim_start = time.time()  # timer
+			print 'Current block', b
+			print 'Settings CPUs to', cpus
+
 			# run the simulation
 			my_simulator = simulator.Simulator(job_slice, users_slice, nodes,
 							   margins, alg_conf, part_conf)
-			results_slice = my_simulator.run()
-
+			#full_results.extend(my_simulator.run())
+			import cProfile
+			cProfile.runctx('my_simulator.run()', globals(), locals(),
+			sort='cumulative')
 			print 'Block finished in {} seconds'.format(
 				round(time.time() - sim_start, 3))
-
-			# TODO TUTAJ SAVE RESULTS
+			print '-' * 30
 
 			if sim_conf.one_block:
 				break
-
-		print '-' * 30
-
-#TODO DODAC TIME.CTIME DO FILENAME! default=time.ctime(),
-#TODO ARGS SIE NIGDZIE NIE ZMIENIAJA? WYPISYWAC ARGS JAKO CONTEXT W KAZDYM PLIKU W 1 LINII
+		# save results for this scheduler
+		filename = '{} {} {}'.format(
+			sim_conf.title,
+			sched.__class__.__name__.split('.')[-1],
+			time.strftime('%b %d %H:%m'),
+		)
+		print filename
+		print args
+#TODO FIXME POMIEDZY SCHEDULERAMI TRZEBA RESETOWAC USERS._GLOBAL_COUNT!!!
 
 ##
 ## Action ``config``.

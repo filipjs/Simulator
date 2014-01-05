@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
-import copy
 import functools
 from abc import ABCMeta, abstractmethod, abstractproperty
 from util import debug_print, delta
 
 
 # set up debug level for this module
-DEBUG_FLAG = __debug__
+DEBUG_FLAG = False #__debug__
 debug_print = functools.partial(debug_print, DEBUG_FLAG, __name__)
 
 
@@ -20,13 +19,14 @@ class _NodeSpace(object):
 
 	"""
 
-	def __init__(self, begin, end, avail, reserved, next):
+	def __init__(self, begin, end, avail, reserved, next, last_space):
 		self.begin = begin
 		self.end = end
 		self.avail = avail  # node map
 		self.reserved = reserved  # node map
 		self.next = next
-		self.job_last_space = 0
+		self.job_last_space = last_space
+		self.reservation_start = False
 
 	@property
 	def length(self):
@@ -77,6 +77,12 @@ class _BaseNodeMap(object):
 		"""
 		raise NotImplemented
 
+	@abstractmethod
+	def copy(self):
+		"""
+		"""
+		raise NotImplemented
+
 
 class BaseManager(object):
 	"""
@@ -87,8 +93,14 @@ class BaseManager(object):
 
 	def __init__(self, nodes, settings):
 		self._settings = settings
-		self._space_list = _NodeSpace(0, float('inf'),
-			self._node_map(nodes), self._node_map(), None)
+		self._space_list = _NodeSpace(
+					0,
+					float('inf'),
+					self._node_map(nodes),
+					self._node_map(),
+					None,
+					0
+				   )
 		# configuration
 		self._node_count = len(nodes)
 		self._max_cpu_per_node = nodes[0]
@@ -159,29 +171,31 @@ class BaseManager(object):
 		total_time = 0
 		it = first = self._space_list
 		avail = None
-
+		must_check = True
 #TODO WINDOW ZROBIC ZE ZAOKRAGLAC TYLKO END TIMY I TIME LIMIT ALE W GORE!!!
 #TODO IF RESOLUTION == 0 -> RESULUTION = 1
 
 		while True:
-			if avail is None:
-				avail = copy.deepcopy(it.avail)
-			else:
-				avail.intersect(it.avail)
+			if must_check:
+				if avail is None:
+					avail = it.avail.copy()
+				else:
+					avail.intersect(it.avail)
 
-			if self._check_nodes(avail, job):
+			if not must_check or self._check_nodes(avail, job):
 				total_time += it.length
 				if total_time >= job.time_limit:
 					last = it
 					break
-				# next space
+				# next space #TODO OPIS
 				it = it.next
+				must_check = it.reservation_start
 			else:
 				total_time = 0
-				# We can only advance one element in case of failure,
-				# because we are using set intersection on the nodes.
+				#TODO OPIS
 				it = first = first.next
 				avail = None
+				must_check = True
 				# Maybe we can stop, if the potential start is already
 				# outside of the backfilling window.
 				if first.begin > self._now + self._settings.bf_window:
@@ -195,21 +209,28 @@ class BaseManager(object):
 		if total_time > job.time_limit:
 			# Divide the `last` space appropriately and
 			# create a new space to occupy the hole.
-			new_space = copy.deepcopy(last)
-			new_space.begin = first.begin + job.time_limit
+			new_space = _NodeSpace(
+					first.begin + job.time_limit,
+					last.end,
+					last.avail.copy(),
+					last.reserved.copy(),
+					last.next,
+					last.job_last_space
+				    )
 
+			# new space is following `last`
 			last.end = new_space.begin
 			last.next = new_space
 			last.job_last_space = 0
-		if can_run:
-			last.job_last_space += 1
 
 		# get the resources from the `avail` node map
 		res = self._assign_resources(avail, job, not can_run)
 		if can_run:
 			job.res = res
+			last.job_last_space += 1
 		else:
 			self._reservations += 1
+			first.reservation_start = True #TODO OPIS
 
 		# update the available nodes in all spaces
 		it = first
@@ -225,7 +246,7 @@ class BaseManager(object):
 			self._dump_space('Added resources', job)
 		return can_run
 
-	def clear_reservations(self):
+	def clear_reservations(self, m=[0]):
 		"""
 		Scheduling pass is over. Clear the created reservations.
 		"""
@@ -234,7 +255,7 @@ class BaseManager(object):
 			return
 
 		prev, it = None, self._space_list
-
+		i = 0
 		while it.next is not None:
 			if not it.job_last_space:
 				# we can safely remove this space
@@ -244,8 +265,13 @@ class BaseManager(object):
 			else:
 				it.avail.add(it.reserved)
 				it.reserved.clear()
+				it.reservation_start = False
 				prev, it = it, it.next
+			i += 1
 		# debug info
+		if i > m[0]:
+			print i
+			m[0] = i
 		if DEBUG_FLAG:
 			self._dump_space('Cleared reservations')
 
@@ -312,6 +338,11 @@ class _SingletonNodeMap(_BaseNodeMap):
 	@property
 	def size(self):
 		return self._cpus
+
+	def copy(self):
+		new_map = self.__class__()
+		new_map._cpus = self._cpus
+		return new_map
 
 	def __repr__(self):
 		return 'CPU count: {}'.format(self._cpus)
