@@ -14,7 +14,7 @@ def delta(seconds):
 	"""
 	Return a nicer representation of a deltatime value.
 	"""
-	if seconds is None:
+	if not seconds:
 		return '()'
 	m, s = divmod(seconds, 60)
 	h, m = divmod(m, 60)

@@ -69,23 +69,22 @@ class Job(object):
 
 	def validate_configuration(self):
 		"""
-		Check and possibly correct the job's configuration
-		of nodes and CPUs.
+		Check and possibly correct the job nodes configuration.
 		"""
-		if not job.nodes and not job.pn_cpus:
+		if not self.nodes and not self.pn_cpus:
 			# feature turned off, OK
 			return
-		if job.nodes and not job.pn_cpus:
-			job._stats['pn_cpus'] = int(math.ceil(job.proc / job.nodes))
-		if not job.nodes and job.pn_cpus:
-			job._stats['nodes'] = int(math.ceil(job.proc / job.pn_cpus))
-		assert job.nodes > 0 and job.pn_cpus > 0, 'invalid configuration'
-		total = job.nodes * job.pn_cpus
-		if total != job.proc:
+		if self.nodes and not self.pn_cpus:
+			self._stats['pn_cpus'] = int(math.ceil(self.proc / self.nodes))
+		if not self.nodes and self.pn_cpus:
+			self._stats['nodes'] = int(math.ceil(self.proc / self.pn_cpus))
+		assert self.nodes > 0 and self.pn_cpus > 0, 'invalid configuration'
+		total = self.nodes * self.pn_cpus
+		if total != self.proc:
 			err = 'WARNING: Job {}: changing `job.proc` from {} to {}'
 			print err.format(self.ID, self.proc, total)
 			self._stats['proc'] = total
-		assert job.proc > 0, 'invalid proc'
+		assert self.proc > 0, 'invalid proc'
 
 	@property
 	def ID(self):
@@ -156,11 +155,11 @@ class Job(object):
 		self.estimate = value
 
 	def __repr__(self):
-		end = self._start and self._start + self.run_time
+		st = self.started and self.start_time
+		end = self.completed and self.end_time
 		s = 'Job {} [{} -> {} -> {} : run {} limit {} proc {}]'
-		return s.format(self.ID, delta(self.submit), delta(self._start),
-			delta(end), delta(self.run_time), delta(self.time_limit),
-			self.proc)
+		return s.format(self.ID, delta(self.submit), delta(st), delta(end),
+			delta(self.run_time), delta(self.time_limit), self.proc)
 
 
 class Campaign(object):
