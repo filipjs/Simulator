@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
 
+"""
+Usefull functions.
+"""
+
+
 def debug_print(flag, module, *args):
 	"""
 	Print the arguments if the `DEBUG_FLAG` is on.

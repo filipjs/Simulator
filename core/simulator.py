@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
+import functools
 import heapq
 import itertools
 import math
-from functools import partial
 import cluster_managers
 from util import debug_print, delta
 
 
 # set up debug level for this module
 DEBUG_FLAG = __debug__
-debug_print = partial(debug_print, DEBUG_FLAG, __name__)
+debug_print = functools.partial(debug_print, DEBUG_FLAG, __name__)
 
 
 class Events(object):
@@ -229,14 +229,17 @@ class Simulator(object):
 #TODO CHECK CORRECNESS AKA
 #USER -> assert not self.active_jobs
 #USER -> assert not self.active_camps
-#TODO ZAMIENIC USER.SHARES NA SHARES_NORM
+
+
+#TODO ZAMIENIC USER.SHARES NA SHARES_NORM ------ to zrobic next!!
+
 
 		return self._results
 
 	def _virt_first_stage(self, period, event):
 		"""
-		In the first stage we just distribute the virtual time
-		for the period to active users.
+		In the first virtual stage we just distribute
+		the virtual time for the period to active users.
 
 		Return if `_virtual_second_stage` is needed.
 		"""
@@ -253,7 +256,7 @@ class Simulator(object):
 
 	def _virt_second_stage(self):
 		"""
-		In the second stage users individually redistribute
+		In the second virtual stage active users redistribute
 		the accumulated virtual time.
 		"""
 		for u in self._users.itervalues():
@@ -265,7 +268,7 @@ class Simulator(object):
 		Update the real work done by the jobs in the period
 		and apply the rolling decay.
 
-		This is currently the only stage.
+		This is currently the only real stage.
 		"""
 		# calculate the decay factor for the period
 		real_decay = self._decay_factor ** period

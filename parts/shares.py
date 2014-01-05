@@ -16,7 +16,7 @@ class BaseShare(object):
 	"""
 	Shares base class. Subclasses are required to override:
 
-	1) _get_share
+	1) _get_shares
 
 	You can access the `Settings` using `self._settings`.
 	"""
@@ -32,7 +32,7 @@ class BaseShare(object):
 	def user_share(self, user):
 		"""
 		Public wrapper method.
-		Run and check the correctness of `_get_share`.
+		Run and check the correctness of `_get_shares`.
 		"""
 		share = self._get_share(user)
 		assert user.shares is None, 'share value already set'
@@ -40,7 +40,7 @@ class BaseShare(object):
 		return share
 
 	@abstractmethod
-	def _get_share(self, user):
+	def _get_shares(self, user):
 		"""
 		Get the number of shares to assign to the user.
 
@@ -55,7 +55,7 @@ class EqualShare(BaseShare):
 	Each user gets an equal number of shares.
 	"""
 
-	def _get_share(self, user):
+	def _get_shares(self, user):
 		return 1
 
 
@@ -79,7 +79,7 @@ class CustomShare(BaseShare):
 					uid, share = map(int, line.split())
 					self._shares[uid] = share
 
-	def _get_share(self, user):
+	def _get_shares(self, user):
 		"""
 		Return the value read from the file or a default value.
 		"""

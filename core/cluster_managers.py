@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 import copy
+import functools
 from abc import ABCMeta, abstractmethod, abstractproperty
-from functools import partial
 from util import debug_print, delta
 
 
 # set up debug level for this module
 DEBUG_FLAG = __debug__
-debug_print = partial(debug_print, DEBUG_FLAG, __name__)
+debug_print = functools.partial(debug_print, DEBUG_FLAG, __name__)
 
 
 """

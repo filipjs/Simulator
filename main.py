@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 import argparse
 import functools
@@ -187,7 +187,8 @@ def run(workload, args):
 		part_conf.scheduler = sched
 
 		for b in blocks:
-			print 'Block:', b
+			sim_start = time.time()  # timer
+			print 'Current block:', b
 
 			# block includes both ends
 			job_slice = jobs[b['left']:b['right']+1]
@@ -220,6 +221,9 @@ def run(workload, args):
 			my_simulator = simulator.Simulator(job_slice, users_slice,
 							   nodes, alg_conf, part_conf)
 			results_slice = my_simulator.run()
+
+			print 'Block finished in {} seconds'.format(
+				round(time.time() - sim_start, 3))
 
 			# TODO TUTAJ SAVE RESULTS
 

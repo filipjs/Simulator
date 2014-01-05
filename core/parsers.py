@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-from abc import ABCMeta, abstractmethod
 import os
 import sys
+from abc import ABCMeta, abstractmethod
 from entities import Job, User
 
 
-class InvalidError(Exception): pass
+class InvalidStatsError(Exception): pass
 
 
 def get_parser(filename):
@@ -107,7 +107,7 @@ class BaseParser(object):
 		  2) Check if job has unique ID.
 		  3) Auto-complete optional data.
 
-		Raises `InvalidError`.
+		Raises `InvalidStatsError`.
 		"""
 		non_negative = ['job_id', 'user_id', 'submit']
 		err = None
@@ -127,7 +127,7 @@ class BaseParser(object):
 
 		if err is not None:
 			msg = 'Job {}: {}'.format(stats.get('job_id'), err)
-			raise InvalidError(msg)
+			raise InvalidStatsError(msg)
 
 		for name in self.OPTIONAL:
 			stats[name] = max(0, stats.get(name, 0))
