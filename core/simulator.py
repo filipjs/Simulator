@@ -217,19 +217,25 @@ class Simulator(object):
 			if not self._pq.empty():
 				self._force_next_decay()
 
-		# return simulation results
-
-#TODO ALL ASSERTS ABOUT SIM CORRECNESS
-#assert not self._waiting_jobs, 'waiting jobs left'
-#TODO KONIEC KAMP = KONIEC OSTATNIEJ PRACY A NIE KONIEC CAMP W VIRT
-#TODO AKA camp.completed_jobs[-1].end_time
-#TODO NIE TRZEBA TEGO ZAPAMIETYWAC TYLKO NA KONCU WYPISAC
-#TODO TAK SAMO WYPISAC JAKIES STATY DLA USEROW NA KONCU
-#TODO WYPISAC == DODAC DO RESULTS
-#TODO CHECK CORRECNESS AKA
-#USER -> assert not self.active_jobs
-#USER -> assert not self.active_camps
-
+		# add more results
+		assert not self._waiting_jobs, 'waiting jobs left'
+		assert not self._cpu_used, 'running jobs left'
+		for u in self._users.itervalues():
+			for i, c in enumerate(u.completed_camps):
+				assert i == c.ID, 'invalid campaign ordering'
+				assert not c.time_left, 'workload left'
+				assert not c.active_jobs, 'active jobs'
+				self._print_camp_ended(c)
+			assert not u.active_camps, 'active campaigns'
+			assert not u.active_jobs, 'active jobs'
+			if DEBUG_FLAG:
+				total_camps = reduce(lambda x, y: x + y.workload,
+						     u.completed_camps, 0)
+				total_jobs = reduce(lambda x, y: x + y.run_time * y.proc,
+						    u.completed_jobs, 0)
+				assert total_camps == total_jobs, 'invalid workload'
+			self._print_user_stats(u)
+		# return everything
 		return self._results
 
 	def _virt_first_stage(self, period, event):
@@ -323,7 +329,8 @@ class Simulator(object):
 		"""
 		Cluster usage.
 		"""
-		return float(self._cpu_used) / self._cpu_limit
+		ut = float(self._cpu_used) / self._cpu_limit
+		return round(ut, 3)
 
 	@property
 	def _cpu_free(self):
@@ -394,8 +401,8 @@ class Simulator(object):
 			# stop if the backfilling checked enough jobs
 			if bf_mode:
 				bf_checked += 1
-			if bf_checked > self._settings.bf_depth:
-				break
+				if bf_checked > self._settings.bf_depth:
+					break
 		# cleanup
 		self._manager.clear_reservations()
 
@@ -491,15 +498,44 @@ class Simulator(object):
 
 	def _print_utility(self):
 		"""
+		UTILITY time value
 		"""
-		pass
+		msg = 'UTILITY {} {}'.format(self._now, self._utility)
+		self._results.append(msg)
 
 	def _print_camp_created(self, camp):
 		"""
+		CAMPAIGN START camp_id user_id time utility
 		"""
-		pass
+		msg = 'CAMPAIGN START {} {} {} {}'.format(
+			camp.ID, camp.user.ID, self._now, self._utility)
+		self._results.append(msg)
+
+	def _print_camp_ended(self, camp):
+		"""
+		CAMPAIGN END camp_id user_id real_end_time workload job_count
+		"""
+		msg = 'CAMPAIGN END {} {} {} {} {}'.format(
+			camp.ID, camp.user.ID, camp.completed_jobs[-1].end_time,
+			camp.workload, len(camp.completed_jobs))
+		self._results.append(msg)
 
 	def _print_job_ended(self, job):
 		"""
+		JOB END job_id camp_id user_id submit start end
+			final_estimate time_limit proc
 		"""
-		pass
+		msg = 'JOB END {} {} {} {} {} {} {} {} {}'.format(
+			job.ID, job.camp.ID, job.user.ID,
+			job.submit, job.start_time, job.end_time,
+			job.estimate, job.time_limit, job.proc)
+		self._results.append(msg)
+
+	def _print_user_stats(self, user):
+		"""
+		USER user_id camp_count lost_virtual false_inactivity
+		"""
+		msg = 'USER {} {} {} {}'.format(
+			user.ID, len(user.completed_camps),
+			user.lost_virtual, user.false_inactivity)
+		self._results.append(msg)

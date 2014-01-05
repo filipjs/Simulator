@@ -86,8 +86,6 @@ class BaseManager(object):
 	__metaclass__ = ABCMeta
 
 	def __init__(self, nodes, settings):
-		assert settings.bf_window > 0, 'invalid bf_window'
-		assert settings.bf_resolution > 0, 'invalid bf_resolution'
 		self._settings = settings
 		self._space_list = _NodeSpace(0, float('inf'),
 			self._node_map(nodes), self._node_map(), None)
@@ -163,6 +161,7 @@ class BaseManager(object):
 		avail = None
 
 #TODO WINDOW ZROBIC ZE ZAOKRAGLAC TYLKO END TIMY I TIME LIMIT ALE W GORE!!!
+#TODO IF RESOLUTION == 0 -> RESULUTION = 1
 
 		while True:
 			if avail is None:
