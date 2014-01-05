@@ -34,7 +34,7 @@ class BaseShare(object):
 		Public wrapper method.
 		Run and check the correctness of `_get_shares`.
 		"""
-		share = self._get_share(user)
+		share = self._get_shares(user)
 		assert user.shares is None, 'share value already set'
 		assert share > 0, 'invalid share value'
 		return share

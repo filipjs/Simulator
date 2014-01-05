@@ -31,7 +31,8 @@ class BaseScheduler(object):
 	def update_stats(self, stats):
 		"""
 		Update the run time statistics.
-		Stats consist of: cpu_used, active_shares, total_usage.
+		Stats consist of:
+		  cpu_used, active_shares, total_usage.
 		"""
 		self._stats = stats
 
@@ -43,7 +44,7 @@ class BaseScheduler(object):
 		scheduler waiting list sort.
 
 		Note:
-		  Lower value corresponds to a **HIGHER** priority.
+		  Higher value corresponds to a **HIGHER** priority.
 		"""
 		raise NotImplemented
 
@@ -60,7 +61,8 @@ class OStrich(BaseScheduler):
 		Inside campaigns order by shorter run time estimate.
 		In case of ties order by earlier submit.
 		"""
-		return (job.estimate, job.submit, job.ID)
+		prio = -job.estimate  # lower value -> higher priority
+		return (prio, job.submit, job.ID)
 
 	def job_priority_key(self, job):
 		"""
@@ -77,8 +79,9 @@ class OStrich(BaseScheduler):
 		#   `_stats.active_shares` / `_stats.cpu_used`.
 		# However, that gives the same value for all the jobs
 		# and we only need the ordering, not the absolute value.
+		prio = -end  # lower value -> higher priority
 		camp_prio = self._job_camp_index(job)
-		return (end, job.camp.created, job.camp.ID, job.user.ID, camp_prio)
+		return (prio, job.camp.created, job.camp.ID, job.user.ID, camp_prio)
 
 
 class SlurmFairshare(BaseScheduler):
@@ -104,6 +107,7 @@ class SlurmFairshare(BaseScheduler):
 			fairshare = 1
 		else:
 			effective = job.user.cpu_clock_used / self._stats['total_usage']
-			fairshare = 2.0 ** -(effective / job.user.shares)
-		prio = int(fairshare * 100000)
-		return (-prio, job.submit, job.ID)
+			shares_norm = job.user.shares  # already normalized
+			fairshare = 2.0 ** -(effective / shares_norm)
+		prio = int(fairshare * 100000)  # higher value -> higher priority
+		return (prio, job.submit, job.ID)

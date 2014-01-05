@@ -252,7 +252,7 @@ class User(object):
 
 	Attributes:
 	  ID: user ID, globally unique.
-	  shares: assigned share of the resources.
+	  shares: **NORMALIZED** share of the resources.
 	  active: state in the virtual schedule.
 	  cpu_clock_used: total usage, already accounting the decay.
 	  active_jobs: not finished jobs (pending or running).

@@ -167,14 +167,20 @@ def run(workload, args):
 	jobs, users = parser.parse_workload(workload, sim_conf.serial)
 	jobs.sort(key=lambda j: j.submit)  # order by submit time
 
-	# set the missing values
+	# set the missing job attributes
 	for j in jobs:
 		j.time_limit = part_conf.submitter.time_limit(j)
 		part_conf.submitter.modify_configuration(j)
 		j.validate_configuration()
 
-	for u in users.itervalues():
-		u.shares = part_conf.share.user_share(u)
+	# set the missing user attributes
+	shares = {}
+	for uid, u in users.iteritems():
+		shares[uid] = part_conf.share.user_share(u)
+	# shares must be normalized
+	total_shares = sum(shares.itervalues())
+	for uid, u in users.iteritems():
+		u.shares = float(shares[uid]) / total_shares
 
 	# divide into blocks
 	blocks = divide_jobs(jobs, sim_conf.job_id, sim_conf.block_time,

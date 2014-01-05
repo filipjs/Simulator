@@ -109,8 +109,8 @@ class Simulator(object):
 		self._users = users
 		self._settings = settings
 		self._parts = parts
-		self._cpu_limit = sum(nodes.itervalues())
 		self._cpu_used = 0
+		self._cpu_limit = sum(nodes.itervalues())
 		self._active_shares = 0
 		self._total_usage = 0
 		# create an appropriate cluster manager
@@ -230,10 +230,6 @@ class Simulator(object):
 #USER -> assert not self.active_jobs
 #USER -> assert not self.active_camps
 
-
-#TODO ZAMIENIC USER.SHARES NA SHARES_NORM ------ to zrobic next!!
-
-
 		return self._results
 
 	def _virt_first_stage(self, period, event):
@@ -245,7 +241,7 @@ class Simulator(object):
 		"""
 		for u in self._users.itervalues():
 			if u.active:
-				u.add_virtual(period * self._share_value(u))
+				u.add_virtual(period * self._share_cpu_value(u))
 
 		if event < Events.campaign_end:
 			return True
@@ -279,10 +275,12 @@ class Simulator(object):
 		for u in self._users.itervalues():
 			u.real_work(period, real_decay)
 
-	def _share_value(self, user):
+	def _share_cpu_value(self, user):
 		"""
-		Calculate the user share of the available resources.
+		Calculate the share of the available resources
+		for the *active* user.
 		"""
+		assert user.active, 'inactive user'
 		share = float(user.shares) / self._active_shares
 		# this will guarantee that the campaigns will eventually end
 		cpus = max(self._cpu_used, 1)
@@ -292,7 +290,7 @@ class Simulator(object):
 		"""
 		Create the `campaign_end` event and insert it to the queue.
 		"""
-		est = (camp.time_left + camp.offset) / self._share_value(camp.user)
+		est = (camp.time_left + camp.offset) / self._share_cpu_value(camp.user)
 		est = self._now + int(math.ceil(est))  # must be int
 		self._pq.add(
 			est,
@@ -321,6 +319,13 @@ class Simulator(object):
 		)
 
 	@property
+	def _utility(self):
+		"""
+		Cluster usage.
+		"""
+		return float(self._cpu_used) / self._cpu_limit
+
+	@property
 	def _cpu_free(self):
 		"""
 		A simple auto-updating property.
@@ -343,17 +348,14 @@ class Simulator(object):
 			'active_shares': self._active_shares,
 			'total_usage': round(self._total_usage, 3)
 		})
-		self._waiting_jobs.sort(
-			key=self._parts.scheduler.job_priority_key,
-			reverse=True
-		)
+		self._waiting_jobs.sort(key=self._parts.scheduler.job_priority_key)
 
 		self._manager.prepare(self._now)
 
 		bf_mode = False
 		bf_checked = 0
 
-		# last job has highest priority
+		# last job has the highest priority
 		prio_iter = len(self._waiting_jobs) - 1
 
 		while self._cpu_free and prio_iter >= 0:
