@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import argparse
+import functools
 import glob
 import importlib
 import os
@@ -314,10 +315,15 @@ def arguments_from_templates(parser, templates):
 
 	def str2bool(v):
 		if v.lower() not in ['true', 'false']:
-			print 'WARNING: not a boolean value:', v
-			print 'Setting the value to False'
+			raise argparse.ArgumentTypeError('choose from True, False')
 		return v.lower() == 'true'
-#TODO ZROBIC FUNKCJE INT CO ERROR GDY UJEMNA WARTOSC!!!!!!
+
+	def positive(atype, v):
+		v = atype(v)
+		if v < 0:
+			raise argparse.ArgumentTypeError('negative value')
+		return v
+
 	for temp in templates:
 		assert temp.default is not None, 'invalid default value'
 
@@ -325,14 +331,17 @@ def arguments_from_templates(parser, templates):
 			'default': temp.default,
 			'help': temp.desc}
 
+		ftypes = {bool: str2bool,
+			  int: functools.partial(positive, int),
+			  float: functools.partial(positive, float),
+			  str: str}
+
 		if isinstance(temp.default, list):
 			# multiple values
-			opts['type'] = type(temp.default[0])
+			opts['type'] = ftypes[type(temp.default[0])]
 			opts['nargs'] = '*'
-		elif isinstance(temp.default, bool):
-			opts['type'] = str2bool
 		else:
-			opts['type'] = type(temp.default)
+			opts['type'] = ftypes[type(temp.default)]
 
 		parser.add_argument('--' + temp.name, **opts)
 
@@ -368,7 +377,7 @@ class MyArgumentParser(argparse.ArgumentParser):
 
 
 if __name__=="__main__":
-#TODO SPRAWDZIC CZY ARGS MOGA BYC UJEMNE, I DODAC CUSTOM ACTION CZY COS DLA UJEMNYCH??
+
 	parser = MyArgumentParser(description=global_desc,
 				  formatter_class=argparse.RawDescriptionHelpFormatter)
 	subparsers = parser.add_subparsers(dest='command', help='Select a command')
