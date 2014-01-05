@@ -198,6 +198,8 @@ def run(workload, args):
 
 			# block includes both ends
 			job_slice = jobs[b['left']:b['right']+1]
+			# get the boundaries
+			margins = (jobs[b['first']].submit, jobs[b['last']].submit)
 
 			# calculate the CPU number
 			if sim_conf.cpu_count:
@@ -224,8 +226,8 @@ def run(workload, args):
 				u.reset()
 
 			# run the simulation
-			my_simulator = simulator.Simulator(job_slice, users_slice,
-							   nodes, alg_conf, part_conf)
+			my_simulator = simulator.Simulator(job_slice, users_slice, nodes,
+							   margins, alg_conf, part_conf)
 			results_slice = my_simulator.run()
 
 			print 'Block finished in {} seconds'.format(
@@ -238,9 +240,6 @@ def run(workload, args):
 
 		print '-' * 30
 
-#first_sub = jobs[b['first']].submit
-#last_sub = jobs[b['last']].submit
-#TODO get results -> drop margins (AKA EXTRA FLAGA Z PRZODU) -> save to file
 #TODO DODAC TIME.CTIME DO FILENAME! default=time.ctime(),
 #TODO ARGS SIE NIGDZIE NIE ZMIENIAJA? WYPISYWAC ARGS JAKO CONTEXT W KAZDYM PLIKU W 1 LINII
 

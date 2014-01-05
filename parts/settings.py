@@ -72,7 +72,7 @@ part_templates = [
 	Template('selector', 'The selector class', 'VirtualSelector'),
 	Template('schedulers', 'The scheduler classes',
 		 ['OStrich', 'SlurmFairshare']),
-	Template('share', 'The share assigner class', 'EqualShare')
+	Template('share', 'The share assigner class', 'EqualShare'),
 ]
 
 sim_templates = [
@@ -88,6 +88,7 @@ sim_templates = [
 	Template('cpu_percent', 'Set the number of CPUs to the P-th percentile', 70),
 	Template('cpu_per_node', 'Divide the cluster into nodes with'
 		 'said number of CPUs', 0),
+	Template('output', 'Directory to store the results in', 'sim_results'),
 ]
 
 

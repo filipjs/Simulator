@@ -94,7 +94,7 @@ class Simulator(object):
 	virtual campaigns and effective CPU usage.
 	"""
 
-	def __init__(self, jobs, users, nodes, settings, parts):
+	def __init__(self, jobs, users, nodes, margins, settings, parts):
 		"""
 		Args:
 		  jobs: a list of submitted `Jobs`.
@@ -109,6 +109,7 @@ class Simulator(object):
 		self._users = users
 		self._settings = settings
 		self._parts = parts
+		self._margins = margins
 		self._cpu_used = 0
 		self._cpu_limit = sum(nodes.itervalues())
 		self._active_shares = 0
@@ -496,20 +497,31 @@ class Simulator(object):
 			# shares still the same
 			return False
 
+	def _margin_symbol(self, event_time):
+		"""
+		Return the status of the event based on the event time.
+		"""
+		if (event_time < self._margins[0] or
+		    event_time > self._margins[1]):
+			return 'MARGIN '
+		return 'CORE '
+
 	def _print_utility(self):
 		"""
 		UTILITY time value
 		"""
 		msg = 'UTILITY {} {}'.format(self._now, self._utility)
-		self._results.append(msg)
+		self._results.append(
+			self._margin_symbol(self._now) + msg)
 
 	def _print_camp_created(self, camp):
 		"""
 		CAMPAIGN START camp_id user_id time utility
 		"""
 		msg = 'CAMPAIGN START {} {} {} {}'.format(
-			camp.ID, camp.user.ID, self._now, self._utility)
-		self._results.append(msg)
+			camp.ID, camp.user.ID, camp.created, self._utility)
+		self._results.append(
+			self._margin_symbol(camp.created) + msg)
 
 	def _print_camp_ended(self, camp):
 		"""
@@ -518,24 +530,27 @@ class Simulator(object):
 		msg = 'CAMPAIGN END {} {} {} {} {}'.format(
 			camp.ID, camp.user.ID, camp.completed_jobs[-1].end_time,
 			camp.workload, len(camp.completed_jobs))
-		self._results.append(msg)
+		self._results.append(
+			self._margin_symbol(camp.created) + msg)
 
 	def _print_job_ended(self, job):
 		"""
-		JOB END job_id camp_id user_id submit start end
-			final_estimate time_limit proc
+		JOB job_id camp_id user_id submit start end
+		    final_estimate time_limit processor_count
 		"""
-		msg = 'JOB END {} {} {} {} {} {} {} {} {}'.format(
+		msg = 'JOB {} {} {} {} {} {} {} {} {}'.format(
 			job.ID, job.camp.ID, job.user.ID,
 			job.submit, job.start_time, job.end_time,
 			job.estimate, job.time_limit, job.proc)
-		self._results.append(msg)
+		self._results.append(
+			self._margin_symbol(job.submit) + msg)
 
 	def _print_user_stats(self, user):
 		"""
-		USER user_id camp_count lost_virtual false_inactivity
+		USER user_id camp_count lost_virtual_time
+		     false_inactivity_period
 		"""
 		msg = 'USER {} {} {} {}'.format(
 			user.ID, len(user.completed_camps),
 			user.lost_virtual, user.false_inactivity)
-		self._results.append(msg)
+		self._results.append('CORE ' + msg)
