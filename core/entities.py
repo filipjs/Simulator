@@ -2,29 +2,6 @@
 from util import delta
 
 
-class ReadOnlyAttr(object):
-	"""
-	A data descriptor that permits only one setter invocation
-	on an unassigned attribute.
-
-	Setting a value `None` changes the state back to unassigned.
-	"""
-	def __init__(self):
-		self._data = {}
-
-	def __get__(self, obj, objtype):
-		assert obj is not None, 'only usable at the instance level'
-		return self._data.get(obj, None)
-
-	def __set__(self, obj, value):
-		if value is None or obj not in self._data:
-			self._data[obj] = value
-		elif self._data[obj] is None:
-			self._data[obj] = value
-		else:
-			raise AttributeError('assignment to a read-only attribute')
-
-
 class Job(object):
 	"""
 	A single job with the relevant properties.
@@ -50,9 +27,6 @@ class Job(object):
 	  4) execution ended
 	"""
 
-	time_limit = ReadOnlyAttr()
-	camp = ReadOnlyAttr()
-
 	def __init__(self, stats, user):
 		"""
 		Required entries in stats:
@@ -60,6 +34,7 @@ class Job(object):
 		"""
 		self._stats = stats
 		self._user = user
+		self.time_limit = None
 
 	def reset(self):
 		self.camp = None
@@ -262,11 +237,10 @@ class User(object):
 
 	"""
 
-	shares = ReadOnlyAttr()
-
 	def __init__(self, uid):
 		self._id = uid
 		self._global_count = 0
+		self.shares = None
 
 	def reset(self):
 		self._virt_pool = 0
