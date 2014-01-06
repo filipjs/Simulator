@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import functools
-from abc import ABCMeta, abstractmethod, abstractproperty
+from abc import ABCMeta, abstractmethod
 from util import debug_print, delta
 
 
@@ -38,50 +38,6 @@ class _NodeSpace(object):
 		return s.format(delta(self.begin), delta(self.end),
 			self.job_last_space, self.avail, self.reserved,
 			pad=pad)
-
-
-class _BaseNodeMap(object):
-	"""
-
-	"""
-
-	__metaclass__ = ABCMeta
-
-	@abstractmethod
-	def intersect(self, other):
-		"""
-		"""
-		raise NotImplemented
-
-	@abstractmethod
-	def add(self, other):
-		"""
-		"""
-		raise NotImplemented
-
-	@abstractmethod
-	def remove(self, other):
-		"""
-		"""
-		raise NotImplemented
-
-	@abstractmethod
-	def clear(self):
-		"""
-		"""
-		raise NotImplemented
-
-	@abstractproperty
-	def size(self):
-		"""
-		"""
-		raise NotImplemented
-
-	@abstractmethod
-	def copy(self):
-		"""
-		"""
-		raise NotImplemented
 
 
 class BaseManager(object):
@@ -126,8 +82,8 @@ class BaseManager(object):
 		ret &= (job.proc <= self._cpu_limit)
 		return ret
 
-	@abstractproperty
-	def _node_map(self):
+	@abstractmethod
+	def _node_map(self, nodes=None):
 		"""
 		Return the constructor for the subclassed `_BaseNodeMap`
 		this manager uses.
@@ -178,9 +134,9 @@ class BaseManager(object):
 		while True:
 			if must_check:
 				if avail is None:
-					avail = it.avail.copy()
+					avail = self.copy(it.avail)
 				else:
-					avail.intersect(it.avail)
+					avail = self.intersect(avail, it.avail)
 
 			if not must_check or self._check_nodes(avail, job):
 				total_time += it.length
@@ -212,8 +168,8 @@ class BaseManager(object):
 			new_space = _NodeSpace(
 					first.begin + job.time_limit,
 					last.end,
-					last.avail.copy(),
-					last.reserved.copy(),
+					self.copy(last.avail),
+					self.copy(last.reserved),
 					last.next,
 					last.job_last_space
 				    )
@@ -235,9 +191,9 @@ class BaseManager(object):
 		# update the available nodes in all spaces
 		it = first
 		while True:
-			it.avail.remove(res)
+			it.avail = self.remove(it.avail, res)
 			if not can_run:
-				it.reserved.add(res)
+				it.reserved = self.add(it.reserved, res)
 			if it == last:
 				break
 			it = it.next
@@ -263,8 +219,8 @@ class BaseManager(object):
 				prev.next = it.next
 				it = it.next
 			else:
-				it.avail.add(it.reserved)
-				it.reserved.clear()
+				it.avail = self.add(it.avail, it.reserved)
+				it.reserved = self.clear()
 				it.reservation_start = False
 				prev, it = it, it.next
 			i += 1
@@ -287,8 +243,8 @@ class BaseManager(object):
 		it = self._space_list
 
 		while it.end < last_space_end:
-			assert not it.reserved.size, 'reservations not removed'
-			it.avail.add(job.res)
+			assert not self.size(it.reserved), 'reservations not removed'
+			it.avail = self.add(it.avail, job.res)
 			it = it.next
 
 		assert it.end == last_space_end, 'missing job last space'
@@ -299,12 +255,12 @@ class BaseManager(object):
 			it.end = it.next.end
 			it.avail = it.next.avail
 			it.reserved = it.next.reserved
-			assert not it.reserved.size, 'reservations not removed'
+			assert not self.size(it.reserved), 'reservations not removed'
 			it.job_last_space = it.next.job_last_space
 			# move 'pointers' as the last step
 			it.next = it.next.next
 		else:
-			it.avail.add(job.res)
+			it.avail = self.add(it.avail, job.res)
 			it.job_last_space -= 1
 		# finally clear
 		del job.res
@@ -312,52 +268,74 @@ class BaseManager(object):
 		if DEBUG_FLAG:
 			self._dump_space('Removed resources', job)
 
+	@abstractmethod
+	def intersect(self, x, y):
+		"""
+		"""
+		raise NotImplemented
 
-class _SingletonNodeMap(_BaseNodeMap):
-	"""
-	"""
+	@abstractmethod
+	def add(self, x, y):
+		"""
+		"""
+		raise NotImplemented
 
-	def __init__(self, nodes=None):
-		if nodes:
-			self._cpus = nodes[0]
-		else:
-			self._cpus = 0
+	@abstractmethod
+	def remove(self, x, y):
+		"""
+		"""
+		raise NotImplemented
 
-	def intersect(self, other):
-		self._cpus = min(self._cpus, other._cpus)
-
-	def add(self, other):
-		self._cpus += other._cpus
-
-	def remove(self, other):
-		self._cpus -= other._cpus
-
+	@abstractmethod
 	def clear(self):
-		self._cpus = 0
+		"""
+		"""
+		raise NotImplemented
 
-	@property
-	def size(self):
-		return self._cpus
+	@abstractmethod
+	def size(self, x):
+		"""
+		"""
+		raise NotImplemented
 
-	def copy(self):
-		new_map = self.__class__()
-		new_map._cpus = self._cpus
-		return new_map
-
-	def __repr__(self):
-		return 'CPU count: {}'.format(self._cpus)
+	@abstractmethod
+	def copy(self, x):
+		"""
+		"""
+		raise NotImplemented
 
 
 class SingletonManager(BaseManager):
 	"""
 	"""
 
-	@property
-	def _node_map(self):
-		return _SingletonNodeMap
+	def _node_map(self, nodes=None):
+		if nodes:
+			return nodes[0]
+		else:
+			return 0
 
 	def _check_nodes(self, avail, job):
-		return job.proc <= avail._cpus
+		return job.proc <= avail
 
 	def _assign_resources(self, avail, job, reservation):
+		assert job.proc <= avail, 'insufficient resources'
 		return self._node_map({0:job.proc})
+
+	def intersect(self, x, y):
+		return min(x, y)
+
+	def add(self, x, y):
+		return x + y
+
+	def remove(self, x, y):
+		return x - y
+
+	def clear(self):
+		return 0
+
+	def size(self, x):
+		return x
+
+	def copy(self, x):
+		return x
