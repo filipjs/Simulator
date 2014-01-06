@@ -134,25 +134,16 @@ class Campaign(object):
 		self.ID = id
 		self.user = user
 		self.created = time
-		self._remaining = 0
-		self._completed = 0
+		self.workload = 0
 		self._virtual = 0
 		self._offset = 0
 		self.active_jobs = []
 		self.completed_jobs = []
 
 	@property
-	def workload(self):
-		return self._remaining + self._completed
-
-	@property
 	def time_left(self):
 		# self.virtual is a float and we want an int
-		return self.workload - int(self._virtual)
-
-	@property
-	def offset(self):
-		return self._offset
+		return self.workload - int(self._virtual) + self._offset
 
 	@property
 	def active(self):
@@ -160,7 +151,7 @@ class Campaign(object):
 
 	def add_job(self, job):
 		# until the job ends we can only use the estimate
-		self._remaining += job.estimate * job.proc
+		self.workload += job.estimate * job.proc
 		self.active_jobs.append(job)
 		job.camp = self # backward link
 
@@ -169,15 +160,15 @@ class Campaign(object):
 
 	def job_ended(self, job):
 		# update the run time to the real value
-		self._remaining -= job.estimate * job.proc
-		self._completed += job.run_time * job.proc
+		self.workload -= job.estimate * job.proc
+		self.workload += job.run_time * job.proc
 		self.active_jobs.remove(job)
 		self.completed_jobs.append(job)
 
 	def job_next_estimate(self, job, new_value):
 		# update the workload
-		self._remaining -= job.estimate * job.proc
-		self._remaining += new_value * job.proc
+		self.workload -= job.estimate * job.proc
+		self.workload += new_value * job.proc
 
 	def __repr__(self):
 		s = 'Camp {} {} [created {} work {} left {} : jobs {} {}]'
@@ -240,13 +231,13 @@ class User(object):
 		"""
 		total = reduce(lambda x, y: x + y._virtual,
 			       self.active_camps, self._virt_pool)
-		offset = 0
+		prev = 0
 		for camp in self.active_camps:
 			virt = min(camp.workload, total)
 			total -= virt
 			camp._virtual = virt
-			camp._offset = offset
-			offset += camp.time_left
+			camp._offset = prev
+			prev = camp.time_left
 		# overflow from total is lost
 		self._virt_pool = 0
 		self.lost_virtual += total

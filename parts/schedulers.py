@@ -74,7 +74,7 @@ class OStrich(BaseScheduler):
 		     (tied here iff jobs are from the same campaign)
 		"""
 		camp, user = job.camp, job.user
-		end = (camp.time_left + camp.offset) / user.shares
+		end = camp.time_left / user.shares
 		# The `end` should be further multiplied by
 		#   `_stats.active_shares` / `_stats.cpu_used`.
 		# However, that gives the same value for all the jobs

@@ -305,7 +305,7 @@ class Simulator(object):
 		"""
 		Create the `campaign_end` event and insert it to the queue.
 		"""
-		est = (camp.time_left + camp.offset) / self._share_cpu_value(camp.user)
+		est = camp.time_left / self._share_cpu_value(camp.user)
 		est = self._now + int(math.ceil(est))  # must be int
 		self._pq.add(
 			est,

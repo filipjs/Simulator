@@ -65,9 +65,9 @@ def divide_jobs(jobs, first_job, block_time, block_margin):
 		b['right'] = i - 1
 		i = b['last']
 
-		if not block_time or jobs[i].submit - st > block_time / 2:
-			# block must be at least half the desired length
-			blocks.append(b)
+		if block_time and jobs[i].submit - st < block_time / 2:
+			print 'WARNING: block with less than half of the desired length', b
+		blocks.append(b)
 		# next block starts right after the previous one, excluding the margins
 		i = i + 1
 	return blocks
