@@ -148,6 +148,8 @@ class Simulator(object):
 		campaigns = False
 
 		forced_count = 0 #TODO DELETE
+		sn, sb = 0, 0 #TODO DELETE
+		last_bf = 0
 		while sub_iter < sub_total or not self._pq.empty():
 			# We only need to keep two `new_job` events in the
 			# queue at the same time (one to process, one to peek).
@@ -160,7 +162,8 @@ class Simulator(object):
 				sub_iter += 1
 				sub_count += 1
 				if sub_iter % 1000 == 0: #TODO DELETE
-					print "WORKING NOW: JOB", sub_iter, forced_count
+					print "WORKING NOW: JOB", sub_iter, forced_count,
+					print 'without', sn, 'with', sb
 			# the queue cannot be empty here
 			self._now, event, entity = self._pq.pop()
 
@@ -209,7 +212,13 @@ class Simulator(object):
 				virt_second = False
 
 			if schedule:
-				self._schedule()
+				if self._now > last_bf + 300:
+					self._schedule(self._settings.bf_depth)
+					sb += 1
+					last_bf = (self._now / 300) * 300
+				else:
+					self._schedule(0)
+					sn += 1
 				schedule = False
 				self._print_utility()  # add results
 
@@ -339,7 +348,7 @@ class Simulator(object):
 		"""
 		return self._cpu_limit - self._cpu_used
 
-	def _schedule(self):
+	def _schedule(self, bf_limit):
 		"""
 		Try to execute the highest priority jobs from
 		the `_waiting_jobs` list.
@@ -401,7 +410,7 @@ class Simulator(object):
 			# stop if the backfilling checked enough jobs
 			if bf_mode:
 				bf_checked += 1
-				if bf_checked > self._settings.bf_depth:
+				if bf_checked > bf_limit:
 					break
 		# cleanup
 		self._manager.clear_reservations()
