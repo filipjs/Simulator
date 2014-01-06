@@ -61,8 +61,8 @@ class BaseSubmitter(object):
 		determine the `nodes` and/or `pn_cpus` values.
 
 		Note:
-		  You have to accordingly modify the job internal attributes
-		  `job._stats['nodes']` and/or `job._stats['pn_cpus'].
+		  You **HAVE TO** to modify the job attributes `job.nodes`
+		  and/or `job.pn_cpus` yourself.
 		"""
 		pass
 

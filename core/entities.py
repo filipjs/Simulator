@@ -32,8 +32,13 @@ class Job(object):
 		Required entries in stats:
 		  id, proc, submit, run_time
 		"""
-		self._stats = stats
-		self._user = user
+		self.ID = stats['job_id']
+		self.proc = stats['proc']
+		self.nodes = stats['nodes']
+		self.pn_cpus = stats['pn_cpus']
+		self.submit = stats['submit']
+		self.run_time = stats['run_time']
+		self.user = user
 		self.time_limit = None
 
 	def reset(self):
@@ -50,9 +55,9 @@ class Job(object):
 			# feature turned off, OK
 			return
 		if self.nodes and not self.pn_cpus:
-			self._stats['pn_cpus'] = int(math.ceil(self.proc / self.nodes))
+			self.pn_cpus = int(math.ceil(self.proc / self.nodes))
 		if not self.nodes and self.pn_cpus:
-			self._stats['nodes'] = int(math.ceil(self.proc / self.pn_cpus))
+			self.nodes = int(math.ceil(self.proc / self.pn_cpus))
 		assert self.nodes > 0 and self.pn_cpus > 0, 'invalid configuration'
 		total = self.nodes * self.pn_cpus
 		if total != self.proc:
@@ -60,34 +65,6 @@ class Job(object):
 			print err.format(self.ID, self.proc, total)
 			self._stats['proc'] = total
 		assert self.proc > 0, 'invalid proc'
-
-	@property
-	def ID(self):
-		return self._stats['job_id']
-
-	@property
-	def user(self):
-		return self._user
-
-	@property
-	def proc(self):
-		return self._stats['proc']
-
-	@property
-	def nodes(self):
-		return self._stats['nodes']
-
-	@property
-	def pn_cpus(self):
-		return self._stats['pn_cpus']
-
-	@property
-	def submit(self):
-		return self._stats['submit']
-
-	@property
-	def run_time(self):
-		return self._stats['run_time']
 
 	@property
 	def start_time(self):
@@ -154,27 +131,15 @@ class Campaign(object):
 
 	"""
 	def __init__(self, id, user, time):
-		self._id = id
-		self._user = user
-		self._created = time
+		self.ID = id
+		self.user = user
+		self.created = time
 		self._remaining = 0
 		self._completed = 0
 		self._virtual = 0
 		self._offset = 0
 		self.active_jobs = []
 		self.completed_jobs = []
-
-	@property
-	def ID(self):
-		return self._id
-
-	@property
-	def user(self):
-		return self._user
-
-	@property
-	def created(self):
-		return self._created
 
 	@property
 	def workload(self):
@@ -238,7 +203,7 @@ class User(object):
 	"""
 
 	def __init__(self, uid):
-		self._id = uid
+		self.ID = uid
 		self._global_count = 0
 		self.shares = None
 
@@ -253,10 +218,6 @@ class User(object):
 		self.completed_jobs = []
 		self.active_camps = []
 		self.completed_camps = []
-
-	@property
-	def ID(self):
-		return self._id
 
 	@property
 	def active(self):

@@ -73,15 +73,15 @@ class OStrich(BaseScheduler):
 		4) priority inside campaigns
 		     (tied here iff jobs are from the same campaign)
 		"""
-		end = job.camp.time_left + job.camp.offset
-		end = float(end) / job.user.shares
+		camp, user = job.camp, job.user
+		end = (camp.time_left + camp.offset) / user.shares
 		# The `end` should be further multiplied by
 		#   `_stats.active_shares` / `_stats.cpu_used`.
 		# However, that gives the same value for all the jobs
 		# and we only need the ordering, not the absolute value.
 		prio = -end  # lower value -> higher priority
 		camp_prio = self._job_camp_index(job)
-		return (prio, job.camp.created, job.camp.ID, job.user.ID, camp_prio)
+		return (prio, camp.created, camp.ID, user.ID, camp_prio)
 
 
 class SlurmFairshare(BaseScheduler):
