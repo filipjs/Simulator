@@ -22,17 +22,16 @@ class _NodeSpace(object):
 	def __init__(self, begin, end, avail, reserved, next, last_space):
 		self.begin = begin
 		self.end = end
-		self.length = self.end - self.begin
 		self.avail = avail  # node map
 		self.reserved = reserved  # node map
 		self.next = next
 		self.job_last_space = last_space
 		self.reservation_start = False
-#TODO ZROBIC FUNKCJE 'ADVANCE TIME' I TAM ZMIENIAC BEGIN I LENGH
+		#self.update()
+		self.length = self.end - self.begin
 
-	#@property
-	#def length(self):
-		#return self.end - self.begin
+	#def update(self):
+		#self.length = self.end - self.begin
 
 	def __repr__(self):
 		pad = ' ' * 22
@@ -119,7 +118,8 @@ class BaseManager(object):
 		self._reservations = 0
 		self._now = now
 		self._space_list.begin = now  # advance the first window
-		self._space_list.length = self._space_list.end - now #TODO
+		self._space_list.length = self._space_list.end - now
+		#self._space_list.update()
 		assert self._space_list.length > 0, 'some finished jobs not removed'
 
 	def try_schedule(self, job):
@@ -186,7 +186,8 @@ class BaseManager(object):
 
 			# new space is following `last`
 			last.end = new_space.begin
-			last.length = last.end - last.begin #TODO TEZ FUNKCJA NA TO??
+			last.length = last.end - last.begin
+			#last.update()
 			last.next = new_space
 			last.job_last_space = 0
 
@@ -213,7 +214,7 @@ class BaseManager(object):
 			self._dump_space('Added resources', job)
 		return can_run
 
-	def clear_reservations(self, m=[0]):
+	def clear_reservations(self):
 		"""
 		Scheduling pass is over. Clear the created reservations.
 		"""
@@ -222,11 +223,12 @@ class BaseManager(object):
 			return
 
 		prev, it = None, self._space_list
-		i = 0
+
 		while it.next is not None:
 			if not it.job_last_space:
 				# we can safely remove this space
 				it.next.begin = it.begin
+				it.next.length = it.next.end - it.next.begin #TODO NOZ KURWA
 				prev.next = it.next
 				it = it.next
 			else:
@@ -234,11 +236,7 @@ class BaseManager(object):
 				it.reserved = self.clear()
 				it.reservation_start = False
 				prev, it = it, it.next
-			i += 1
 		# debug info
-		if i > m[0]:
-			print i
-			m[0] = i
 		if DEBUG_FLAG:
 			self._dump_space('Cleared reservations')
 
@@ -248,6 +246,7 @@ class BaseManager(object):
 		"""
 		self._space_list.begin = job.end_time
 		self._space_list.length = self._space_list.end - job.end_time
+		#self._space_list.update()
 		assert self._space_list.length >= 0, 'some finished jobs not removed'
 		assert hasattr(job, 'res'), 'missing job resources'
 
@@ -265,7 +264,8 @@ class BaseManager(object):
 		if it.job_last_space == 1:
 			# we can safely merge this space with the next one
 			it.end = it.next.end
-			it.length = it.end - it.begin #TODO
+			it.length = it.end - it.begin
+			#it.update()
 			it.avail = it.next.avail
 			it.reserved = it.next.reserved
 			assert not self.size(it.reserved), 'reservations not removed'
