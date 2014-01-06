@@ -22,15 +22,17 @@ class _NodeSpace(object):
 	def __init__(self, begin, end, avail, reserved, next, last_space):
 		self.begin = begin
 		self.end = end
+		self.length = self.end - self.begin
 		self.avail = avail  # node map
 		self.reserved = reserved  # node map
 		self.next = next
 		self.job_last_space = last_space
 		self.reservation_start = False
+#TODO ZROBIC FUNKCJE 'ADVANCE TIME' I TAM ZMIENIAC BEGIN I LENGH
 
-	@property
-	def length(self):
-		return self.end - self.begin
+	#@property
+	#def length(self):
+		#return self.end - self.begin
 
 	def __repr__(self):
 		pad = ' ' * 22
@@ -117,6 +119,7 @@ class BaseManager(object):
 		self._reservations = 0
 		self._now = now
 		self._space_list.begin = now  # advance the first window
+		self._space_list.length = self._space_list.end - now #TODO
 		assert self._space_list.length > 0, 'some finished jobs not removed'
 
 	def try_schedule(self, job):
@@ -131,14 +134,21 @@ class BaseManager(object):
 #TODO WINDOW ZROBIC ZE ZAOKRAGLAC TYLKO END TIMY I TIME LIMIT ALE W GORE!!!
 #TODO IF RESOLUTION == 0 -> RESULUTION = 1
 
+		cop = self.copy
+		inter = self.intersect
+		check_j = self._check_nodes
+
 		while True:
 			if must_check:
 				if avail is None:
-					avail = self.copy(it.avail)
+					avail = cop(it.avail)
+					#avail = self.copy(it.avail)
 				else:
-					avail = self.intersect(avail, it.avail)
+					avail = inter(avail, it.avail)
+					#avail = self.intersect(avail, it.avail)
 
-			if not must_check or self._check_nodes(avail, job):
+			if not must_check or check_j(avail, job):
+			#if not must_check or self._check_nodes(avail, job):
 				total_time += it.length
 				if total_time >= job.time_limit:
 					last = it
@@ -176,6 +186,7 @@ class BaseManager(object):
 
 			# new space is following `last`
 			last.end = new_space.begin
+			last.length = last.end - last.begin #TODO TEZ FUNKCJA NA TO??
 			last.next = new_space
 			last.job_last_space = 0
 
@@ -236,6 +247,7 @@ class BaseManager(object):
 		Free the resources taken by the job.
 		"""
 		self._space_list.begin = job.end_time
+		self._space_list.length = self._space_list.end - job.end_time
 		assert self._space_list.length >= 0, 'some finished jobs not removed'
 		assert hasattr(job, 'res'), 'missing job resources'
 
@@ -253,6 +265,7 @@ class BaseManager(object):
 		if it.job_last_space == 1:
 			# we can safely merge this space with the next one
 			it.end = it.next.end
+			it.length = it.end - it.begin #TODO
 			it.avail = it.next.avail
 			it.reserved = it.next.reserved
 			assert not self.size(it.reserved), 'reservations not removed'
