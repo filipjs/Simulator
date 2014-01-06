@@ -44,7 +44,7 @@ class BaseScheduler(object):
 		scheduler waiting list sort.
 
 		Note:
-		  Higher value corresponds to a **HIGHER** priority.
+		  Lower value corresponds to a **HIGHER** priority.
 		"""
 		raise NotImplemented
 
@@ -54,16 +54,6 @@ class OStrich(BaseScheduler):
 	Default implementation of the OStrich algorithm.
 	"""
 
-	def _job_camp_index(self, job):
-		"""
-		This assumes that the compared jobs will be from
-		the same campaign.
-		Inside campaigns order by shorter run time estimate.
-		In case of ties order by earlier submit.
-		"""
-		prio = -job.estimate  # lower value -> higher priority
-		return (prio, job.submit, job.ID)
-
 	def job_priority_key(self, job):
 		"""
 		Priority ordering for the scheduler:
@@ -72,6 +62,9 @@ class OStrich(BaseScheduler):
 		3) camp ID, user ID (needed to break previous ties)
 		4) priority inside campaigns
 		     (tied here iff jobs are from the same campaign)
+
+		Inside campaigns order by shorter run time estimate.
+		In case of ties order by earlier submit.
 		"""
 		camp, user = job.camp, job.user
 		end = camp.time_left / user.shares
@@ -79,10 +72,8 @@ class OStrich(BaseScheduler):
 		#   `_stats.active_shares` / `_stats.cpu_used`.
 		# However, that gives the same value for all the jobs
 		# and we only need the ordering, not the absolute value.
-		prio = -end  # lower value -> higher priority
-		camp_prio = self._job_camp_index(job)
-		return (prio, camp.created, camp.ID, user.ID, camp_prio)
-
+		return (end, camp.created, camp.ID, user.ID,
+			job.estimate, job.submit, job.ID)
 
 class SlurmFairshare(BaseScheduler):
 	"""
@@ -110,4 +101,4 @@ class SlurmFairshare(BaseScheduler):
 			shares_norm = job.user.shares  # already normalized
 			fairshare = 2.0 ** -(effective / shares_norm)
 		prio = int(fairshare * 100000)  # higher value -> higher priority
-		return (prio, job.submit, job.ID)
+		return (-prio, job.submit, job.ID)

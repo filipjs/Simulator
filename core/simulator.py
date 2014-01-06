@@ -364,7 +364,10 @@ class Simulator(object):
 			'active_shares': self._active_shares,
 			'total_usage': round(self._total_usage, 3)
 		})
-		self._waiting_jobs.sort(key=self._parts.scheduler.job_priority_key)
+		self._waiting_jobs.sort(
+			key=self._parts.scheduler.job_priority_key,
+			reverse=True
+		)
 
 		self._manager.prepare(self._now)
 
