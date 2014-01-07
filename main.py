@@ -226,16 +226,24 @@ def run(workload, args):
 	if sim_conf.one_block:
 		blocks = blocks[:1]
 
-	# prepare workers pool, leave one CPU free
+	# Prepare workers pool, leave one CPU free,
+	# so the operating system can stay responsive.
 	my_pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1)
 
-	async_results = {sched: [] for sched in part_conf.schedulers}
+	async_results = {sched: [None] * len(blocks)
+			 for sched in part_conf.schedulers}
+
 	block_msg = 'Block {:3}) {} scheduler {} jobs {} CPUs'
+	global_start = time.time()
 
 	print '-' * 50
 	print 'Simulation STARTED. Block count', len(blocks)
 
-	for num, b in enumerate(blocks):
+	# start blocks with highest job count first
+	ordering = sorted(enumerate(blocks),
+			  key=lambda x: x[1]['right'] - x[1]['left'],
+			  reverse=True)
+	for num, b in ordering:
 		# block includes both ends
 		job_slice = jobs[b['left']:b['right']+1]
 		# get the boundaries
@@ -267,7 +275,7 @@ def run(workload, args):
 
 			if not PROFILE_FLAG:
 				async_r = my_pool.apply_async(simulate_block, params)
-				async_results[sched].append((async_r, msg))
+				async_results[sched][num] = (async_r, msg)
 			else:
 				print msg
 				simulate_block(*params)
@@ -276,13 +284,11 @@ def run(workload, args):
 		return
 
 	# wait for the results and than save them
-	time_stamp = time.strftime('%b-%d-%H:%M')
-
 	for sched, sim_results in async_results.iteritems():
 		filename = '{}-{}-{}'.format(
 			sim_conf.title,
 			sched.__class__.__name__,
-			time_stamp
+			time.strftime('%b-%d-%H:%M', global_start)
 		)
 		filename = os.path.join(sim_conf.output, filename)
 
@@ -300,7 +306,8 @@ def run(workload, args):
 		f.close()
 		print 'Saving results COMPLETED.', filename
 
-	print 'Simulation COMPLETED.'
+	print 'Simulation COMPLETED. Total run time',
+	print round(time.time() - global_start, 3)
 	print '-' * 50
 
 

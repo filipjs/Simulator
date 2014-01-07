@@ -195,7 +195,6 @@ class User(object):
 
 	def __init__(self, uid):
 		self.ID = uid
-		self._global_count = 0
 		self.shares = None
 
 	def reset(self):
@@ -209,6 +208,7 @@ class User(object):
 		self.completed_jobs = []
 		self.active_camps = []
 		self.completed_camps = []
+		self._camp_count = 0
 
 	@property
 	def active(self):
@@ -278,8 +278,8 @@ class User(object):
 			  'invalid campaign ordering'
 
 	def create_campaign(self, time):
-		new_camp = Campaign(self._global_count, self, time)
-		self._global_count += 1
+		new_camp = Campaign(self._camp_count, self, time)
+		self._camp_count += 1
 		self.active_camps.append(new_camp)
 		return new_camp
 

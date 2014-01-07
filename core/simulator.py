@@ -137,7 +137,7 @@ class Simulator(object):
 		#   the queue to force the calculations in case the gap
 		#   between consecutive events would be too long.
 		self._decay_factor = 1 - (0.693 / self._settings.decay)
-		self._force_period = 60 * 5
+		self._force_period = 60 * 10
 
 		sub_iter = 0
 		sub_total = len(self._future_jobs)
@@ -228,6 +228,8 @@ class Simulator(object):
 
 			# If the queue is empty here, the simulation has ended.
 			# We need to stop the infinite loop of `force_decay` events.
+#TODO NIE EMPTY A ZLICZAC SUBMITY I ENDY I JAK NIE MA TO STYKA
+#TODO BO JAK SAME KAMPANIE ZOSTANA TO PO CO TO LICZYC
 			if not self._pq.empty():
 				self._force_next_decay()
 
@@ -240,6 +242,8 @@ class Simulator(object):
 				assert not c.time_left, 'workload left'
 				assert not c.active_jobs, 'active jobs'
 				self._print_camp_ended(c)
+			assert u._camp_count == len(u.completed_camps), \
+			  'missing camps'
 			assert not u.active_camps, 'active campaigns'
 			assert not u.active_jobs, 'active jobs'
 			self._print_user_stats(u)
