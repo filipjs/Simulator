@@ -203,8 +203,8 @@ class User(object):
 		self.lost_virtual = 0
 		self.last_active = None
 		self.false_inactivity = 0
-		self._cpu_clock_used = 0
 		self._occupied_cpus = 0
+		self.cpu_clock_used = 0
 		self.active_jobs = []
 		self.completed_jobs = []
 		self.active_camps = []
@@ -213,10 +213,6 @@ class User(object):
 	@property
 	def active(self):
 		return bool(self.active_camps)
-
-	@property
-	def cpu_clock_used(self):
-		return round(self._cpu_clock_used, 3)
 
 	def add_virtual(self, value):
 		"""
@@ -247,8 +243,8 @@ class User(object):
 		Process the `value` long period in the real schedule.
 		Apply the decay factor `real_decay`.
 		"""
-		self._cpu_clock_used += self._occupied_cpus * value
-		self._cpu_clock_used *= real_decay
+		self.cpu_clock_used += self._occupied_cpus * value
+		self.cpu_clock_used *= real_decay
 
 	def add_job(self, job):
 		self.active_jobs.append(job)

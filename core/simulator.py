@@ -362,7 +362,7 @@ class Simulator(object):
 		self._parts.scheduler.update_stats({
 			'cpu_used': self._cpu_used,
 			'active_shares': self._active_shares,
-			'total_usage': round(self._total_usage, 3)
+			'total_usage': self._total_usage
 		})
 		self._waiting_jobs.sort(
 			key=self._parts.scheduler.job_priority_key,

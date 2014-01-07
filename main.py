@@ -4,11 +4,15 @@ import argparse
 import functools
 import glob
 import importlib
+import multiprocessing
 import os
 import sys
 import time
 from core import parsers, simulator
 from parts import settings
+
+
+PROFILE_FLAG = False#True
 
 
 ##
@@ -66,8 +70,9 @@ def divide_jobs(jobs, first_job, block_time, block_margin):
 		i = b['last']
 
 		if block_time and jobs[i].submit - st < block_time / 2:
-			print 'WARNING: block with less than half of the desired length', b
-		blocks.append(b)
+			print 'WARNING: skipping short block (< 1/2 length)', b
+		else:
+			blocks.append(b)
 		# next block starts right after the previous one, excluding the margins
 		i = i + 1
 	return blocks
@@ -143,6 +148,36 @@ def make_classes(name, conf, modules=[]):
 		raise Exception('class not found: ' + name)
 
 
+def simulate_block(jobs, nodes, margins, alg_conf, part_conf):
+	"""
+	"""
+
+	# extract the users and reset all instances
+	users = {}
+	for j in jobs:
+		j.reset()
+		users[j.user.ID] = j.user
+	for u in users.itervalues():
+		u.reset()
+
+	sim_start = time.time()  # timer
+
+	# run the simulation
+	my_simulator = simulator.Simulator(jobs, users, nodes,
+			   margins, alg_conf, part_conf)
+
+	if not PROFILE_FLAG:
+		r = my_simulator.run()
+	else:
+		import cProfile
+		cProfile.runctx('my_simulator.run()', globals(), locals(),
+				sort='cumulative')
+		r = []
+
+	speed = round(time.time() - sim_start, 3)
+	return r, speed
+
+
 def run(workload, args):
 	"""
 	Run the simulation described in `args` on the `workload`.
@@ -188,70 +223,86 @@ def run(workload, args):
 	# divide into blocks
 	blocks = divide_jobs(jobs, sim_conf.job_id, sim_conf.block_time,
 			     sim_conf.block_margin)
+	if sim_conf.one_block:
+		blocks = blocks[:1]
 
-	for sched in part_conf.schedulers:
-		print 'Simulating:', sched.__class__.__name__
+	# prepare workers pool, leave one CPU free
+	my_pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1)
 
-		# set the current scheduler
-		part_conf.scheduler = sched
-		full_results = []
+	async_results = {sched: [] for sched in part_conf.schedulers}
+	block_msg = 'Block {:3}) {} scheduler {} jobs {} CPUs'
 
-		for b in blocks:
-			# block includes both ends
-			job_slice = jobs[b['left']:b['right']+1]
-			# get the boundaries
-			margins = (jobs[b['first']].submit, jobs[b['last']].submit)
+	print '-' * 50
+	print 'Simulation STARTED. Block count', len(blocks)
 
-			# calculate the CPU number
-			if sim_conf.cpu_count:
-				cpus = sim_conf.cpu_count
+	for num, b in enumerate(blocks):
+		# block includes both ends
+		job_slice = jobs[b['left']:b['right']+1]
+		# get the boundaries
+		margins = (jobs[b['first']].submit, jobs[b['last']].submit)
+
+		# calculate the CPU number
+		if sim_conf.cpu_count:
+			cpus = sim_conf.cpu_count
+		else:
+			cpus = cpu_percentile(job_slice, sim_conf.cpu_percent)
+		# setup the node configuration
+		if sim_conf.cpu_per_node:
+			full_count = cpus / sim_conf.cpu_per_node
+			nodes = {i: sim_conf.cpu_per_node
+					for i in xrange(full_count)}
+			rest = cpus % sim_conf.cpu_per_node
+			if rest:
+				nodes[len(nodes)] = rest
+		else:
+			nodes = {0: cpus}
+
+		for sched in part_conf.schedulers:
+			# set the current scheduler
+			part_conf.scheduler = sched
+
+			params = (job_slice, nodes, margins, alg_conf, part_conf)
+			msg = block_msg.format(num, sched.__class__.__name__,
+					       len(job_slice), cpus)
+
+			if not PROFILE_FLAG:
+				async_r = my_pool.apply_async(simulate_block, params)
+				async_results[sched].append((async_r, msg))
 			else:
-				cpus = cpu_percentile(job_slice, sim_conf.cpu_percent)
-			# setup the node configuration
-			if sim_conf.cpu_per_node:
-				full_count = cpus / sim_conf.cpu_per_node
-				nodes = {i: sim_conf.cpu_per_node
-						for i in xrange(full_count)}
-				rest = cpus % sim_conf.cpu_per_node
-				if rest:
-					nodes[len(nodes)] = rest
-			else:
-				nodes = {0: cpus}
+				print msg
+				simulate_block(*params)
 
-			# reset the entities
-			users_slice = {}
-			for j in job_slice:
-				j.reset()
-				users_slice[j.user.ID] = j.user
-			for u in users_slice.itervalues():
-				u.reset()
+	if PROFILE_FLAG:
+		return
 
-			sim_start = time.time()  # timer
-			print 'Current block', b
-			print 'Settings CPUs to', cpus
+	# wait for the results and than save them
+	time_stamp = time.strftime('%b-%d-%H:%M')
 
-			# run the simulation
-			my_simulator = simulator.Simulator(job_slice, users_slice, nodes,
-							   margins, alg_conf, part_conf)
-			#full_results.extend(my_simulator.run())
-			import cProfile
-			cProfile.runctx('my_simulator.run()', globals(), locals(),
-			sort='cumulative')
-			print 'Block finished in {} seconds'.format(
-				round(time.time() - sim_start, 3))
-			print '-' * 30
-
-			if sim_conf.one_block:
-				break
-		# save results for this scheduler
-		filename = '{} {} {}'.format(
+	for sched, sim_results in async_results.iteritems():
+		filename = '{}-{}-{}'.format(
 			sim_conf.title,
-			sched.__class__.__name__.split('.')[-1],
-			time.strftime('%b %d %H:%m'),
+			sched.__class__.__name__,
+			time_stamp
 		)
-		print filename
-		print args
-#TODO FIXME POMIEDZY SCHEDULERAMI TRZEBA RESETOWAC USERS._GLOBAL_COUNT!!!
+		filename = os.path.join(sim_conf.output, filename)
+
+		f = open(filename, 'w')
+		f.write(str(args) + '\n')  # full parameters
+
+		for async_r, msg in sim_results:
+			print msg
+			# ctr-c doesn't seem to work without timeout
+			r, speed = async_r.get(timeout=60*60*24*365)
+			print '  Simulation time', speed
+			# save partial results to file
+			f.writelines( '%s\n' % line for line in r )
+
+		f.close()
+		print 'Saving results COMPLETED.', filename
+
+	print 'Simulation COMPLETED.'
+	print '-' * 50
+
 
 ##
 ## Action ``config``.

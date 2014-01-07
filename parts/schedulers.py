@@ -97,8 +97,9 @@ class SlurmFairshare(BaseScheduler):
 		if not self._stats['total_usage']:
 			fairshare = 1
 		else:
-			effective = job.user.cpu_clock_used / self._stats['total_usage']
-			shares_norm = job.user.shares  # already normalized
+			user = job.user
+			effective = user.cpu_clock_used / self._stats['total_usage']
+			shares_norm = user.shares  # already normalized
 			fairshare = 2.0 ** -(effective / shares_norm)
 		prio = int(fairshare * 100000)  # higher value -> higher priority
 		return (-prio, job.submit, job.ID)
