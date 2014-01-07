@@ -12,7 +12,7 @@ from core import parsers, simulator
 from parts import settings
 
 
-PROFILE_FLAG = False#True
+PROFILE_FLAG = False
 
 
 ##
@@ -69,8 +69,8 @@ def divide_jobs(jobs, first_job, block_time, block_margin):
 		b['right'] = i - 1
 		i = b['last']
 
-		if block_time and jobs[i].submit - st < block_time / 2:
-			print 'WARNING: skipping short block (< 1/2 length)', b
+		if block_time and jobs[i].submit - st < block_time / 3:
+			print 'WARNING: skipping short block (< 1/3 length)', b
 		else:
 			blocks.append(b)
 		# next block starts right after the previous one, excluding the margins
@@ -285,10 +285,11 @@ def run(workload, args):
 
 	# wait for the results and than save them
 	for sched, sim_results in async_results.iteritems():
+		time_stamp = time.localtime(global_start)
 		filename = '{}-{}-{}'.format(
 			sim_conf.title,
 			sched.__class__.__name__,
-			time.strftime('%b-%d-%H:%M', global_start)
+			time.strftime('%b-%d-%H:%M', time_stamp)
 		)
 		filename = os.path.join(sim_conf.output, filename)
 

@@ -137,11 +137,12 @@ class Simulator(object):
 		#   the queue to force the calculations in case the gap
 		#   between consecutive events would be too long.
 		self._decay_factor = 1 - (0.693 / self._settings.decay)
-		self._force_period = 60 * 10
+		self._force_period = 60 * 5
 
 		sub_iter = 0
 		sub_total = len(self._future_jobs)
 		sub_count = 0
+		end_iter = 0
 
 		virt_second = False
 		schedule = False
@@ -150,6 +151,7 @@ class Simulator(object):
 		forced_count = 0 #TODO DELETE
 		sn, sb = 0, 0 #TODO DELETE
 		last_bf = 0
+
 		while sub_iter < sub_total or not self._pq.empty():
 			# We only need to keep two `new_job` events in the
 			# queue at the same time (one to process, one to peek).
@@ -162,7 +164,7 @@ class Simulator(object):
 				sub_iter += 1
 				sub_count += 1
 				if sub_iter % 1000 == 0: #TODO DELETE
-					print "WORKING NOW: JOB", sub_iter, forced_count,
+					print "WORKING NOW: JOB STRT", sub_iter, forced_count,
 					print 'without', sn, 'with', sb
 			# the queue cannot be empty here
 			self._now, event, entity = self._pq.pop()
@@ -183,6 +185,7 @@ class Simulator(object):
 				schedule = campaigns = True
 			elif event == Events.job_end:
 				self._job_end_event(entity)
+				end_iter += 1
 				schedule = campaigns = True
 			elif event == Events.estimate_end:
 				self._estimate_end_event(entity)
@@ -226,11 +229,9 @@ class Simulator(object):
 				self._update_camp_estimates()
 				campaigns = False
 
-			# If the queue is empty here, the simulation has ended.
-			# We need to stop the infinite loop of `force_decay` events.
-#TODO NIE EMPTY A ZLICZAC SUBMITY I ENDY I JAK NIE MA TO STYKA
-#TODO BO JAK SAME KAMPANIE ZOSTANA TO PO CO TO LICZYC
-			if not self._pq.empty():
+			if end_iter < sub_total:
+				# There are still jobs in the simulation
+				# so we need an accurate usage.
 				self._force_next_decay()
 
 		# add more results
@@ -508,6 +509,8 @@ class Simulator(object):
 			# user became inactive
 			user.last_active = self._now
 			self._active_shares -= user.shares
+			# fix rounding errors
+			self._active_shares = max(self._active_shares, 0)
 			# we need new estimates, because shares changed
 			return True
 		else:
