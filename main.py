@@ -12,7 +12,7 @@ from core import parsers, simulator
 from parts import settings
 
 
-PROFILE_FLAG = False
+PROFILE_FLAG = True
 
 
 ##
@@ -232,7 +232,7 @@ def run(workload, args):
 
 	async_results = {sched: [None] * len(blocks)
 			 for sched in part_conf.schedulers}
-
+#TODO DO MSG DAC JOB COUNT + MARGIN COUNT
 	block_msg = 'Block {:3}) {} scheduler {} jobs {} CPUs'
 	global_start = time.time()
 

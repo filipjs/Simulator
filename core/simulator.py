@@ -180,9 +180,15 @@ class Simulator(object):
 				self._real_first_stage(diff, event)
 
 			if event == Events.new_job:
-				self._new_job_event(entity)
-				sub_count -= 1
+				# check if the job is runnable
+				if self._manager.sanity_test(entity):
+					self._new_job_event(entity)
+				else:
+					#TODO PRINT MA BYC
+					#print 'WARNING: job', job.ID, 'can never run'
+					end_iter += 1
 				schedule = campaigns = True
+				sub_count -= 1
 			elif event == Events.job_end:
 				self._job_end_event(entity)
 				end_iter += 1
@@ -427,10 +433,6 @@ class Simulator(object):
 		"""
 		Add the job to a campaign. Update the owner activity status.
 		"""
-		if not self._manager.sanity_test(job):
-			#TODO PRINT MA BYC
-			#print 'WARNING: job', job.ID, 'can never run'
-			return
 		user = job.user
 
 		if not user.active:
