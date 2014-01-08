@@ -42,13 +42,10 @@ class Block(object):
 		"""
 		self._jobs = jobs[inx['left']:inx['right']+1]
 		self.core_count = inx['last'] - inx['first'] + 1
-		self.margin_count = len(self._jobs) - core_count
+		self.margin_count = len(self._jobs) - self.core_count
 		self.core_start = jobs[inx['first']].submit
 		self.core_end = self.core_start + block_time
 		self.number = num
-
-	def get_jobs(self):
-		return self._jobs
 
 	def __len__(self):
 		return len(self._jobs)
@@ -102,15 +99,11 @@ def divide_jobs(jobs, first_job, block_time, block_margin):
 			block_time = float('inf')
 		else:
 			i = inx['first']
-
 			while i < len(jobs) and jobs[i].submit < end:
 				i += 1
-
 			inx['last'] = i - 1
-
 			while i < len(jobs) and jobs[i].submit < end + block_margin:
 				i += 1
-
 			inx['right'] = i - 1
 
 		blocks.append(
@@ -190,34 +183,28 @@ def make_classes(name, conf, modules=[]):
 		raise Exception('class not found: ' + name)
 
 
-def simulate_block(jobs, nodes, margins, alg_conf, part_conf):
+def simulate_block(block, nodes, alg_conf, part_conf):
 	"""
 	"""
 
 	# extract the users and reset all instances
 	users = {}
-	for j in jobs:
+	for j in block:
 		j.reset()
 		users[j.user.ID] = j.user
 	for u in users.itervalues():
 		u.reset()
 
-	sim_start = time.time()  # timer
-
-	# run the simulation
-	my_simulator = simulator.Simulator(jobs, users, nodes,
-			   margins, alg_conf, part_conf)
+	my_simulator = simulator.Simulator(block, users, nodes,
+					   alg_conf, part_conf)
 
 	if not PROFILE_FLAG:
-		r = my_simulator.run()
+		return my_simulator.run()
 	else:
 		import cProfile
-		cProfile.runctx('my_simulator.run()', globals(), locals(),
+		cProfile.runctx('print my_simulator.run()[1]',
+				globals(), locals(),
 				sort='cumulative')
-		r = []
-
-	speed = round(time.time() - sim_start, 3)
-	return r, speed
 
 
 def run(workload, args):
@@ -276,7 +263,7 @@ def run(workload, args):
 		async_results = {sched: [None] * len(blocks)
 				 for sched in part_conf.schedulers}
 
-	block_msg = 'Block {:2} (first id {}) {} scheduler {} jobs'
+	block_msg = 'Block {:2} (first id {}): {} scheduler {} jobs' \
 		    ' (inc. {} margin jobs) {} CPUs'
 	if not sim_conf.cpu_count:
 		block_msg += ' ({}-th percentile)'.format(sim_conf.cpu_percent)
@@ -287,7 +274,7 @@ def run(workload, args):
 	print 'Simulation STARTED. Block count', len(blocks)
 
 	# start with blocks with highest job count
-	for bl in sorted(blocks, key=lambda x: len(x), reverse=True)
+	for bl in sorted(blocks, key=lambda x: len(x), reverse=True):
 		# calculate the CPU number
 		if sim_conf.cpu_count:
 			cpus = sim_conf.cpu_count
@@ -314,7 +301,7 @@ def run(workload, args):
 
 			if not PROFILE_FLAG:
 				async_r = my_pool.apply_async(simulate_block, params)
-				async_results[sched][num] = (async_r, msg)
+				async_results[sched][bl.number] = (async_r, msg)
 			else:
 				print msg
 				simulate_block(*params)

@@ -3,6 +3,7 @@ import functools
 import heapq
 import itertools
 import math
+import time
 import cluster_managers
 from util import debug_print, delta
 
@@ -103,22 +104,22 @@ class Simulator(object):
 	virtual campaigns and effective CPU usage.
 	"""
 
-	def __init__(self, jobs, users, nodes, margins, settings, parts):
+	def __init__(self, block, users, nodes, settings, parts):
 		"""
 		Args:
-		  jobs: a list of submitted `Jobs`.
+		  block: a `Block` instance with the submitted `Jobs`.
 		  users: a dictionary of `Users`.
 		  nodes: the configuration of nodes in the cluster.
 		  settings: algorithmic settings
 		  parts: *instances* of all the system parts
 		"""
-		assert jobs and users and nodes, 'invalid arguments'
-		self._future_jobs = jobs
+		assert block and users and nodes, 'invalid arguments'
+		self._future_jobs = block
 		self._waiting_jobs = []
 		self._users = users
 		self._settings = settings
 		self._parts = parts
-		self._margins = margins
+		self._core_period = (block.core_start, block.core_end)
 		self._stats = Container()
 		self._stats.cpu_used = 0
 		self._stats.cpu_limit = sum(nodes.itervalues())
@@ -157,11 +158,11 @@ class Simulator(object):
 		end_iter = 0
 
 		schedule = backfill = False
-
 		diag = Container()
 		diag.forced = 0
 		diag.sched_pass = diag.sched_jobs = 0
 		diag.bf_pass = diag.bf_jobs = 0
+		diag.run_time = time.time()
 
 		while sub_iter < sub_total or not self._pq.empty():
 			# We only need to keep two `new_job` events in the
@@ -267,6 +268,7 @@ class Simulator(object):
 
 		# cleanup
 		self._parts.scheduler.clear_stats()
+		diag.run_time = round(time.time() - diag.run_time, 3)
 
 		# add the rest of the results
 		assert not self._waiting_jobs, 'waiting jobs left'
@@ -279,9 +281,10 @@ class Simulator(object):
 			assert u._camp_count == len(u.completed_camps), \
 			    'missing camps'
 			self._print_user_stats(u)
-		print diag.__dict__
-		#return self._results, diag #TODO FIXME
-		return self._results
+
+
+		return self._results, diag
+
 
 	def _virt_first_stage(self, period):
 		"""
@@ -560,8 +563,8 @@ class Simulator(object):
 		"""
 		Return the status of the event based on the event time.
 		"""
-		if (event_time < self._margins[0] or
-		    event_time > self._margins[1]):
+		if (event_time < self._core_period[0] or
+		    event_time >= self._core_period[1]):
 			return 'MARGIN '
 		return 'CORE '
 
