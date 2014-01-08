@@ -83,4 +83,4 @@ class DefaultTimeSubmitter(BaseSubmitter):
 	"""
 
 	def _get_limit(self, job):
-		return max(job.runtime, self._settings.default_limit)
+		return max(job.run_time, self._settings.default_limit)

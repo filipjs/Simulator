@@ -185,6 +185,7 @@ class SWFParser(BaseParser):
 		'wait_time': 2,
 		'run_time': 3,
 		'proc': 4,
+		'req_time': 8,
 		'user_id': 11,
 		'partition': 15
 	}

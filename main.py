@@ -234,7 +234,7 @@ def run(workload, args):
 	async_results = {sched: [None] * len(blocks)
 			 for sched in part_conf.schedulers}
 
-	block_msg = 'Block {:3}) {} scheduler {} jobs {} margin jobs {} CPUs'
+	block_msg = 'Block {:3}) {} scheduler {} jobs ({} margin jobs) {} CPUs'
 	if not sim_conf.cpu_count:
 		block_msg += ' ({}-th percentile)'.format(sim_conf.cpu_percent)
 	global_start = time.time()
@@ -273,8 +273,8 @@ def run(workload, args):
 			part_conf.scheduler = sched
 
 			params = (job_slice, nodes, margins, alg_conf, part_conf)
-			jcount = b['last'] - b['first'] + 1
-			mcount = b['right'] - b['left'] + 1 - jcount
+			jcount = b['right'] - b['left'] + 1
+			mcount = jcount - (b['last'] - b['first'] + 1)
 			msg = block_msg.format(num, sched, jcount, mcount, cpus)
 
 			if not PROFILE_FLAG:

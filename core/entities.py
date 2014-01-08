@@ -32,6 +32,7 @@ class Job(object):
 		Required entries in stats:
 		  id, proc, submit, run_time
 		"""
+		self._orig = stats
 		self.ID = stats['job_id']
 		self.proc = stats['proc']
 		self.nodes = stats['nodes']
@@ -61,10 +62,9 @@ class Job(object):
 		assert self.nodes > 0 and self.pn_cpus > 0, 'invalid configuration'
 		total = self.nodes * self.pn_cpus
 		if total != self.proc:
-			err = 'WARNING: Job {}: changing `job.proc` from {} to {}'
+			err = 'WARNING: Job {} changing `job.proc` from {} to {}'
 			print err.format(self.ID, self.proc, total)
-			self._stats['proc'] = total
-		assert self.proc > 0, 'invalid proc'
+			self.proc = total
 
 	@property
 	def start_time(self):
