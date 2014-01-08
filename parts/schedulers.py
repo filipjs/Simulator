@@ -35,7 +35,7 @@ class BaseScheduler(object):
 		run time statistics.
 
 		Stats consist of:
-		  cpu_used, cpu_limit, active_shares, total_usage.
+		  cpu_used, active_shares, total_usage.
 		"""
 		self._stats = stats
 
@@ -87,9 +87,9 @@ class OStrich(BaseScheduler):
 		return (end, camp.created, camp.ID, user.ID,
 			job.estimate, job.submit, job.ID)
 
-class SlurmFairshare(BaseScheduler):
+class Fairshare(BaseScheduler):
 	"""
-	SLURM implementation of the Fairshare algorithm.
+	SLURM implementation of the fairshare algorithm.
 	"""
 
 	def job_priority_key(self, job):

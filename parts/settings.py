@@ -71,7 +71,7 @@ part_templates = [
 	Template('submitter', 'The submitter class', 'OracleSubmitter'),
 	Template('selector', 'The selector class', 'VirtualSelector'),
 	Template('schedulers', 'The scheduler classes',
-		 ['OStrich', 'SlurmFairshare']),
+		 ['OStrich', 'Fairshare']),
 	Template('share', 'The share assigner class', 'EqualShare'),
 ]
 

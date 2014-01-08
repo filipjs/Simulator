@@ -13,7 +13,7 @@ from parts import settings
 
 
 PROFILE_FLAG = True
-#PROFILE_FLAG = False
+PROFILE_FLAG = False
 
 
 ##
@@ -39,6 +39,7 @@ class Block(object):
 		  inx: dictionary with indexes.
 		  block_time: core length.
 		  num: block number
+
 		"""
 		self._jobs = jobs[inx['left']:inx['right']+1]
 		self.core_count = inx['last'] - inx['first'] + 1
@@ -68,7 +69,7 @@ def divide_jobs(jobs, first_job, block_time, block_margin):
 	  block_time: length of each block in seconds or ``zero``.
 	  block_margin: extra length added to the blocks on both sides.
 
-	Returns:
+	Return:
 	  a list of consecutive blocks as `Block` instances.
 	"""
 	if first_job:
@@ -185,20 +186,33 @@ def make_classes(name, conf, modules=[]):
 
 def print_stats(diag):
 	"""
+	Print the diagnostic statistics from a simulation.
 	"""
 	# change some stats to percentages
 	diag.bf_jobs *= 100
 	diag.avg_util *= 100
 
 	diag_msg = """\
-  Backfilled jobs {bf_jobs:.2f}%, average utilization {avg_util:.2f}%
-  Backfill loops {bf_pass}, sched loops {sched_pass}
-  Simulation time {sim_time:.2f} decay events {forced}"""
+     Backfilled jobs {bf_jobs:.2f}%, average utilization {avg_util:.2f}%
+     Backfill loops {bf_pass}, sched loops {sched_pass}
+     Simulation time {sim_time:.2f} decay events {forced}"""
 	print diag_msg.format(**diag.__dict__)
 
 
 def simulate_block(block, nodes, alg_conf, part_conf):
 	"""
+	Do a simulation on the specified block.
+
+	Args:
+	  block: `Block` with `Jobs`.
+	  nodes: the cluster node configuration.
+	  alg_conf: algorithmic settings.
+	  part_conf: parts instances.
+
+	Return:
+	  a list with event strings.
+	  diagnostic statistics from the run.
+
 	"""
 
 	# extract the users and reset all instances

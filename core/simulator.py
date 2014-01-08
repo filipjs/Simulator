@@ -120,27 +120,55 @@ class Simulator(object):
 		self._settings = settings
 		self._parts = parts
 		self._core_period = (block.core_start, block.core_end)
-		self._stats = Container()
-		self._stats.cpu_used = 0
-		self._stats.cpu_limit = sum(nodes.itervalues())
-		self._stats.active_shares = 0
-		self._stats.total_usage = 0
+		self._cpu_limit = sum(nodes.itervalues())
 		# create an appropriate cluster manager
 		if len(nodes) == 1:
 			self._manager = cluster_managers.SingletonManager(nodes, settings)
 		else:
 			self._manager = cluster_managers.SlurmManager(nodes, settings)
 
+	def _initialize(self):
+		"""
+		First step before the simulation has started.
+		"""
+		# run time statistics
+		self._stats = Container()
+		self._stats.cpu_used = 0
+		self._stats.active_shares = 0
+		self._stats.total_usage = 0
+		# diagnostic statistics
+		self._diag = Container()
+		self._diag.forced = 0
+		self._diag.sched_pass = self._diag.sched_jobs = 0
+		self._diag.bf_pass = self._diag.bf_jobs = 0
+		self._diag.prev_util = None  # a pair <time, utility>
+		self._diag.avg_util = 0
+		self._diag.sim_time = time.time()
+
+		self._results = []
+		self._pq = PriorityQueue()
+		# initialize the scheduler
+		self._parts.scheduler.set_stats(self._stats)
+
+	def _finalize(self):
+		"""
+		Final step after the simulation has ended.
+		"""
+		# finalize diagnostic stats
+		true_end = min(self._diag.prev_util[0], self._core_period[1])
+		self._diag.avg_util /= (true_end - self._core_period[0])
+		del self._diag.prev_util
+		self._diag.sim_time = time.time() - self._diag.sim_time
+		self._diag.sched_jobs /= float(len(self._future_jobs))
+		self._diag.bf_jobs /= float(len(self._future_jobs))
+		# clear the scheduler
+		self._parts.scheduler.clear_stats()
+
 	def run(self):
 		"""
 		Proceed with the simulation.
 		Return a list of encountered events.
 		"""
-		self._results = []
-
-		self._pq = PriorityQueue()
-		# the first job submission is the simulation 'time zero'
-		prev_event = self._future_jobs[0].submit
 
 		# Note:
 		#   The CPU usage decay is always applied after each event.
@@ -150,8 +178,7 @@ class Simulator(object):
 		self._decay_factor = 1 - (0.693 / self._settings.decay)
 		self._force_period = 60 * 5
 
-		# initialize the scheduler
-		self._parts.scheduler.set_stats(self._stats)
+		self._initialize()
 
 		sub_iter = sub_count = 0
 		sub_total = len(self._future_jobs)
@@ -161,13 +188,9 @@ class Simulator(object):
 		instant_bf = (self._settings.bf_depth and
 			      not self._settings.bf_interval)
 
-		diag = Container()
-		diag.forced = 0
-		diag.sched_pass = diag.sched_jobs = 0
-		diag.bf_pass = diag.bf_jobs = 0
-		diag.prev_util = (prev_event, 0)  # <time, utility>
-		diag.avg_util = 0
-		diag.sim_time = time.time()
+		# the first job submission is the simulation 'time zero'
+		prev_event = self._future_jobs[0].submit
+		self._diag.prev_util = (prev_event, 0)
 
 		while sub_iter < sub_total or not self._pq.empty():
 			# We only need to keep two `new_job` events in the
@@ -222,7 +245,7 @@ class Simulator(object):
 				virt_second = False  # already done
 				campaigns = self._camp_end_event(entity)
 			elif event == Events.force_decay:
-				diag.forced += 1
+				self._diag.forced += 1
 				virt_second = False  # no need to do it now
 				campaigns = False  # no change to campaign ends
 			else:
@@ -244,18 +267,19 @@ class Simulator(object):
 				self._virt_second_stage()
 
 			if schedule:
-				diag.sched_pass += 1
-				diag.sched_jobs += self._schedule(bf_mode=False)
-				self._avg_util(diag) # after sched
+				scheduled_jobs = self._schedule(bf_mode=False)
+				self._diag.sched_jobs += scheduled_jobs
+				self._diag.sched_pass += 1
+				self._update_diag_util() # after schedule
 				schedule = False
 				if instant_bf: backfill = True
 				self._store_utility()  # add results
 
 			if backfill:
-				diag.bf_pass += 1
-				exec_jobs = self._schedule(bf_mode=True)
-				diag.bf_jobs += exec_jobs
-				self._avg_util(diag)  # after sched
+				backfilled_jobs = self._schedule(bf_mode=True)
+				self._diag.bf_jobs += backfilled_jobs
+				self._diag.bf_pass += 1
+				self._update_diag_util()  # after schedule
 				backfill = False
 				self._store_utility()  # add results
 
@@ -265,7 +289,7 @@ class Simulator(object):
 			# add periodically occurring events
 			if event < Events.bf_run:
 				self._next_backfill(self._now)
-			elif event == Events.bf_run and exec_jobs:
+			elif event == Events.bf_run and backfilled_jobs:
 				self._next_backfill(self._now + 1)
 
 			if end_iter < sub_total:
@@ -274,29 +298,16 @@ class Simulator(object):
 				assert not self._pq.empty(), 'infinite loop'
 				self._next_force_decay()
 
-		# finalize diagnostic stats
-		true_end = min(diag.prev_util[0], self._core_period[1])
-		del diag.prev_util
-		diag.avg_util /= (true_end - self._core_period[0])
-
-		diag.sim_time = time.time() - diag.sim_time
-
-		diag.sched_jobs /= float(sub_total)
-		diag.bf_jobs /= float(sub_total)
-
-		# add the rest of the results
+		# do the final step
+		self._finalize()
+		# and now add the rest of the results
 		for u in self._users.itervalues():
-			for i, c in enumerate(u.completed_camps):
-				assert i == c.ID, 'invalid campaign ordering'
-				assert not c.time_left, 'workload left'
-				self._store_camp_ended(c)
 			self._store_user_stats(u)
-		self._store_system(diag)
+			for i, c in enumerate(u.completed_camps):
+				self._store_camp_ended(c)
+		self._store_diag_stats()
 
-		# cleanup
-		self._parts.scheduler.clear_stats()
-
-		return self._results, diag
+		return self._results, self._diag
 
 
 	def _virt_first_stage(self, period):
@@ -396,14 +407,14 @@ class Simulator(object):
 		"""
 		Cluster usage.
 		"""
-		return float(self._stats.cpu_used) / self._stats.cpu_limit
+		return float(self._stats.cpu_used) / self._cpu_limit
 
 	@property
 	def _cpu_free(self):
 		"""
 		Free CPUs.
 		"""
-		return self._stats.cpu_limit - self._stats.cpu_used
+		return self._cpu_limit - self._stats.cpu_used
 
 	def _execute(self, job):
 		"""
@@ -571,29 +582,29 @@ class Simulator(object):
 			# shares still the same
 			return False
 
-	def _avg_util(self, diag):
+	def _update_diag_util(self):
 		"""
 		Keep track of the system average utility.
 		"""
 		core_st, core_end = self._core_period
-		prev, ut = diag.prev_util
+		prev, ut = self._diag.prev_util
 
 		if self._now >= core_st and prev < core_end:
 			prev = max(prev, core_st)
 			now = min(self._now, core_end)
-			diag.avg_util += (now - prev) * ut
-		diag.prev_util = (self._now, self._utility)
+			self._diag.avg_util += (now - prev) * ut
+		self._diag.prev_util = (self._now, self._utility)
 
-	def _store_msg(self, event_time, msg):
+	def _store_msg(self, event_time, event_msg):
 		"""
-		Add the message to the results.
+		Add the event string to the results.
 		"""
 		if (event_time < self._core_period[1] and
 		    event_time >= self._core_period[0]):
 			prefix = 'CORE '
 		else:
 			prefix = 'MARGIN '
-		self._results.append(prefix + msg)
+		self._results.append(prefix + event_msg)
 
 	def _store_utility(self):
 		"""
@@ -645,12 +656,12 @@ class Simulator(object):
 			user.lost_virtual, user.false_inactivity)
 		self._results.append('CORE ' + msg)
 
-	def _store_system(self, diag):
+	def _store_diag_stats(self):
 		"""
 		Event message:
-		  SYSTEM sched_iterations sched_jobs bf_iterations bf_jobs
-		         average_core_utility simulation_time forced_events
+		  DIAG sched_iterations sched_jobs bf_iterations bf_jobs
+		       average_core_utility simulation_time forced_events
 		"""
-		msg = 'SYSTEM {sched_pass} {sched_jobs} {bf_pass} {bf_jobs}' \
-		      '{avg_util:.4f} {sim_time:.2f} {forced}'.format(**diag.__dict__)
-		self._results.append('CORE ' + msg)
+		msg = 'DIAG {sched_pass} {sched_jobs:.4f} {bf_pass} {bf_jobs:.4f}' \
+		      ' {avg_util:.4f} {sim_time:.2f} {forced}'
+		self._results.append('CORE ' + msg.format(**self._diag.__dict__))
