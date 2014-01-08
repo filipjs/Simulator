@@ -158,10 +158,15 @@ class Simulator(object):
 		end_iter = 0
 
 		schedule = backfill = False
+		instant_bf = (self._settings.bf_depth and
+			      not self._settings.bf_interval)
+
 		diag = Container()
 		diag.forced = 0
 		diag.sched_pass = diag.sched_jobs = 0
 		diag.bf_pass = diag.bf_jobs = 0
+		diag.prev_util = (prev_event, 0)  # <time, utility>
+		diag.avg_util = 0
 		diag.run_time = time.time()
 
 		while sub_iter < sub_total or not self._pq.empty():
@@ -241,15 +246,18 @@ class Simulator(object):
 			if schedule:
 				diag.sched_pass += 1
 				diag.sched_jobs += self._schedule(bf_mode=False)
+				self._avg_util(diag) # after sched
 				schedule = False
-				self._print_utility()  # add results
+				if instant_bf: backfill = True
+				self._store_utility()  # add results
 
 			if backfill:
 				diag.bf_pass += 1
 				exec_jobs = self._schedule(bf_mode=True)
 				diag.bf_jobs += exec_jobs
+				self._avg_util(diag)  # after sched
 				backfill = False
-				self._print_utility()  # add results
+				self._store_utility()  # add results
 
 			if campaigns:
 				self._update_camp_estimates()
@@ -266,22 +274,24 @@ class Simulator(object):
 				assert not self._pq.empty(), 'infinite loop'
 				self._next_force_decay()
 
-		# cleanup
-		self._parts.scheduler.clear_stats()
+		# finalize diagnostic stats
+		true_end = min(diag.prev_util[0], self._core_period[1])
+		del diag.prev_util
+		diag.avg_util /= (true_end - self._core_period[0])
 		diag.run_time = round(time.time() - diag.run_time, 3)
 
 		# add the rest of the results
-		assert not self._waiting_jobs, 'waiting jobs left'
-		assert not self._stats.cpu_used, 'running jobs left'
 		for u in self._users.itervalues():
 			for i, c in enumerate(u.completed_camps):
 				assert i == c.ID, 'invalid campaign ordering'
 				assert not c.time_left, 'workload left'
-				self._print_camp_ended(c)
-			assert u._camp_count == len(u.completed_camps), \
-			    'missing camps'
-			self._print_user_stats(u)
+				self._store_camp_ended(c)
+			self._store_user_stats(u)
 
+		self._store_system(diag)
+
+		# cleanup
+		self._parts.scheduler.clear_stats()
 
 		return self._results, diag
 
@@ -359,7 +369,7 @@ class Simulator(object):
 		"""
 		if (not self._settings.bf_depth or
 		    not self._settings.bf_interval):
-			return  # backfilling turned off
+			return  # backfilling 'thread' turned off
 		next = float(start) / self._settings.bf_interval
 		next = math.ceil(next) * self._settings.bf_interval
 		self._pq.add(
@@ -483,7 +493,7 @@ class Simulator(object):
 
 		if camp is None:
 			camp = user.create_campaign(self._now)
-			self._print_camp_created(camp)  # add results
+			self._store_camp_created(camp)  # add results
 
 		camp.add_job(job)
 		user.add_job(job)
@@ -499,7 +509,7 @@ class Simulator(object):
 		self._manager.job_ended(job)
 		self._stats.cpu_used -= job.proc
 		assert self._stats.cpu_used >= 0, 'invalid cpu count'
-		self._print_job_ended(job)  # add results
+		self._store_job_ended(job)  # add results
 
 	def _estimate_end_event(self, job):
 		"""
@@ -559,58 +569,75 @@ class Simulator(object):
 			# shares still the same
 			return False
 
-	def _margin_symbol(self, event_time):
+	def _avg_util(self, diag):
 		"""
-		Return the status of the event based on the event time.
+		Keep track of the system average utility.
 		"""
-		if (event_time < self._core_period[0] or
-		    event_time >= self._core_period[1]):
-			return 'MARGIN '
-		return 'CORE '
+		core_st, core_end = self._core_period
+		prev, ut = diag.prev_util
 
-	def _print_utility(self):
+		if self._now >= core_st and prev < core_end:
+			prev = max(prev, core_st)
+			now = min(self._now, core_end)
+			diag.avg_util += (now - prev) * ut
+
+		diag.prev_util = (self._now, self._utility)
+
+	def _store_msg(self, event_time, msg):
 		"""
-		UTILITY time value
+		Add the message to the results.
+		"""
+		if (event_time < self._core_period[1] and
+		    event_time >= self._core_period[0]):
+			prefix = 'CORE '
+		else:
+			prefix = 'MARGIN '
+		self._results.append(prefix + msg)
+
+	def _store_utility(self):
+		"""
+		Event message:
+		  UTILITY time value
 		"""
 		msg = 'UTILITY {} {}'.format(self._now, self._utility)
-		self._results.append(
-			self._margin_symbol(self._now) + msg)
+		self._store_msg(self._now, msg)
 
-	def _print_camp_created(self, camp):
+	def _store_camp_created(self, camp):
 		"""
-		CAMPAIGN START camp_id user_id time utility
+		Event message:
+		  CAMPAIGN START camp_id user_id time utility
 		"""
 		msg = 'CAMPAIGN START {} {} {} {}'.format(
 			camp.ID, camp.user.ID, camp.created, self._utility)
-		self._results.append(
-			self._margin_symbol(camp.created) + msg)
+		self._store_msg(camp.created, msg)
 
-	def _print_camp_ended(self, camp):
+	def _store_camp_ended(self, camp):
 		"""
-		CAMPAIGN END camp_id user_id real_end_time workload job_count
+		Event message:
+		  CAMPAIGN END camp_id user_id real_end_time workload job_count
 		"""
 		msg = 'CAMPAIGN END {} {} {} {} {}'.format(
 			camp.ID, camp.user.ID, camp.completed_jobs[-1].end_time,
 			camp.workload, len(camp.completed_jobs))
-		self._results.append(
-			self._margin_symbol(camp.created) + msg)
+		self._store_msg(camp.created, msg)
 
-	def _print_job_ended(self, job):
+	def _store_job_ended(self, job):
 		"""
-		JOB job_id camp_id user_id submit start end
-		    final_estimate time_limit processor_count
+		Event message:
+		  JOB job_id camp_id user_id submit start end
+		      final_estimate time_limit processor_count
 		"""
 		msg = 'JOB {} {} {} {} {} {} {} {} {}'.format(
 			job.ID, job.camp.ID, job.user.ID,
 			job.submit, job.start_time, job.end_time,
 			job.estimate, job.time_limit, job.proc)
-		self._results.append(
-			self._margin_symbol(job.submit) + msg)
+		self._store_msg(job.submit, msg)
 
-	def _print_user_stats(self, user):
+	def _store_user_stats(self, user):
 		"""
-		USER user_id camp_count lost_virtual_time
-		     false_inactivity_period
+		Event message:
+		  USER user_id camp_count lost_virtual_time
+		       false_inactivity_period
 		"""
 		msg = 'USER {} {} {} {}'.format(
 			user.ID, len(user.completed_camps),

@@ -326,7 +326,7 @@ def run(workload, args):
 			print msg
 			# ctr-c doesn't seem to work without timeout
 			r, speed = async_r.get(timeout=60*60*24*365)
-			print '  Simulation time', speed
+			print '  Simulation time', speed.__dict__
 			# save partial results to file
 			f.write('NEXT BLOCK\n')
 			f.writelines( '%s\n' % line for line in r )
