@@ -12,7 +12,8 @@ from core import parsers, simulator
 from parts import settings
 
 
-PROFILE_FLAG = False#True
+PROFILE_FLAG = True
+PROFILE_FLAG = False
 
 
 ##
@@ -234,6 +235,8 @@ def run(workload, args):
 			 for sched in part_conf.schedulers}
 
 	block_msg = 'Block {:3}) {} scheduler {} jobs {} margin jobs {} CPUs'
+	if not sim_conf.cpu_count:
+		block_msg += ' ({}-th percentile)'.format(sim_conf.cpu_percent)
 	global_start = time.time()
 
 	print '-' * 50

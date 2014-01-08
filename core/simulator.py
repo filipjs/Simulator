@@ -8,7 +8,8 @@ from util import debug_print, delta
 
 
 # set up debug level for this module
-DEBUG_FLAG = False #__debug__
+DEBUG_FLAG = True
+DEBUG_FLAG = False
 debug_print = functools.partial(debug_print, DEBUG_FLAG, __name__)
 
 
@@ -278,8 +279,9 @@ class Simulator(object):
 			assert u._camp_count == len(u.completed_camps), \
 			    'missing camps'
 			self._print_user_stats(u)
-
-		return self._results, misc
+		print diag.__dict__
+		#return self._results, diag #TODO FIXME
+		return self._results
 
 	def _virt_first_stage(self, period):
 		"""
@@ -434,7 +436,11 @@ class Simulator(object):
 			assert self._settings.bf_depth, 'invalid bf_depth'
 			work = min(len(self._waiting_jobs), self._settings.bf_depth)
 		else:
-			try_func = self._manager.try_schedule
+			#TODO FIXME
+			#try_func = self._manager.try_schedule
+			self._manager.prepare_backfill(self._now)
+			try_func = self._manager.try_backfill
+
 			work = len(self._waiting_jobs)
 
 		# last job has the highest priority
@@ -456,6 +462,7 @@ class Simulator(object):
 
 			prio_iter -= 1
 			work -= 1
+		self._manager.clear_reservations() #TODO REMOVE
 		return started
 
 	def _new_job_event(self, job):

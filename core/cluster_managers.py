@@ -62,7 +62,7 @@ class BaseManager(object):
 		self._node_count = len(nodes)
 		self._max_cpu_per_node = nodes[0]
 		self._cpu_limit = sum(nodes.itervalues())
-
+		self._reservations = 0#TODO REMOVE????
 	def _dump_space(self, *args):
 		"""
 		Print the current state of node spaces.
@@ -114,19 +114,20 @@ class BaseManager(object):
 	def try_schedule(self, job):
 		"""
 		"""
-		pass
+		pass #TODO SIMPLE VERSIOB OF BACKFILL
 
 	def prepare_backfill(self, now):
 		"""
 		Prepare the manager for the upcoming backfilling pass.
 		"""
+		#self.clear_reservations()#TODO CLEANUP ROBIC W PREPARE
+		#TODO ODEJMOWAC W CLEAR + ASSERT + PRIV FUNC
 		self._reservations = 0
 		self._now = now
 		self._space_list.begin = now  # advance the first window
 		self._space_list.length = self._space_list.end - now
 		#self._space_list.update()
 		assert self._space_list.length > 0, 'some finished jobs not removed'
-		self._manager.clear_reservations()#TODO CLEANUP ROBIC W PREPARE
 
 	def try_backfill(self, job):
 		"""
@@ -137,8 +138,6 @@ class BaseManager(object):
 		it = first = self._space_list
 		avail = None
 		must_check = True
-#TODO WINDOW ZROBIC ZE ZAOKRAGLAC TYLKO END TIMY I TIME LIMIT ALE W GORE!!!
-#TODO IF RESOLUTION == 0 -> RESULUTION = 1
 
 		cop = self.copy
 		inter = self.intersect
