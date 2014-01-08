@@ -27,14 +27,23 @@ class BaseScheduler(object):
 		Init the class with a `Settings` instance.
 		"""
 		self._settings = settings
+		self._stats = None
 
-	def update_stats(self, stats):
+	def set_stats(self, stats):
 		"""
-		Update the run time statistics.
+		Supply a simple class which links to the simulator
+		run time statistics.
+
 		Stats consist of:
-		  cpu_used, active_shares, total_usage.
+		  cpu_used, cpu_limit, active_shares, total_usage.
 		"""
 		self._stats = stats
+
+	def clear_stats(self):
+		"""
+		Remove the statistics after the simulation is over.
+		"""
+		self._stats = None
 
 	@abstractmethod
 	def job_priority_key(self, job):
@@ -47,6 +56,9 @@ class BaseScheduler(object):
 		  Lower value corresponds to a **HIGHER** priority.
 		"""
 		raise NotImplemented
+
+	def __str__(self):
+		return self.__class__.__name__
 
 
 class OStrich(BaseScheduler):
@@ -94,11 +106,11 @@ class SlurmFairshare(BaseScheduler):
 		The priority then is multiplied by some weight (usually around 10k-100k).
 		This means, that at high over-usage all priorities are the same.
 		"""
-		if not self._stats['total_usage']:
+		if not self._stats.total_usage:
 			fairshare = 1
 		else:
 			user = job.user
-			effective = user.cpu_clock_used / self._stats['total_usage']
+			effective = user.cpu_clock_used / self._stats.total_usage
 			shares_norm = user.shares  # already normalized
 			fairshare = 2.0 ** -(effective / shares_norm)
 		prio = int(fairshare * 100000)  # higher value -> higher priority

@@ -62,7 +62,7 @@ alg_templates = [
 	Template('bf_depth', 'The maximum number of jobs to backfill', 50),
 	Template('bf_window', 'The amount of time to look into the future'
 		 'when considering jobs for backfilling', 24, 'HOURS'),
-	Template('bf_resolution', 'The resolution of the backfilling data', 1, 'SEC'),
+	Template('bf_interval', 'The time between backfilling iterations', 5, 'MINS'),
 ]
 
 # You can change the default classes here.

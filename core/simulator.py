@@ -20,8 +20,9 @@ class Events(object):
 	new_job = 1
 	job_end = 2
 	estimate_end = 3
-	campaign_end = 4
-	force_decay = 5
+	bf_run = 4
+	campaign_end = 5
+	force_decay = 6
 
 
 class PriorityQueue(object):
@@ -87,6 +88,13 @@ class PriorityQueue(object):
 			heapq.heappop(self._pq)
 
 
+class Container(object):
+	"""
+	A simple class that acts as a dictionary.
+	"""
+	pass
+
+
 class Simulator(object):
 	"""
 	Defines the flow of the simulation.
@@ -110,10 +118,11 @@ class Simulator(object):
 		self._settings = settings
 		self._parts = parts
 		self._margins = margins
-		self._cpu_used = 0
-		self._cpu_limit = sum(nodes.itervalues())
-		self._active_shares = 0
-		self._total_usage = 0
+		self._stats = Container()
+		self._stats.cpu_used = 0
+		self._stats.cpu_limit = sum(nodes.itervalues())
+		self._stats.active_shares = 0
+		self._stats.total_usage = 0
 		# create an appropriate cluster manager
 		if len(nodes) == 1:
 			self._manager = cluster_managers.SingletonManager(nodes, settings)
@@ -139,18 +148,19 @@ class Simulator(object):
 		self._decay_factor = 1 - (0.693 / self._settings.decay)
 		self._force_period = 60 * 5
 
-		sub_iter = 0
+		# initialize the scheduler
+		self._parts.scheduler.set_stats(self._stats)
+
+		sub_iter = sub_count = 0
 		sub_total = len(self._future_jobs)
-		sub_count = 0
 		end_iter = 0
 
-		virt_second = False
-		schedule = False
-		campaigns = False
+		schedule = backfill = False
 
-		forced_count = 0 #TODO DELETE
-		sn, sb = 0, 0 #TODO DELETE
-		last_bf = 0
+		diag = Container()
+		diag.forced = 0
+		diag.sched_pass = diag.sched_jobs = 0
+		diag.bf_pass = diag.bf_jobs = 0
 
 		while sub_iter < sub_total or not self._pq.empty():
 			# We only need to keep two `new_job` events in the
@@ -163,9 +173,6 @@ class Simulator(object):
 				)
 				sub_iter += 1
 				sub_count += 1
-				if sub_iter % 1000 == 0: #TODO DELETE
-					print "WORKING NOW: JOB STRT", sub_iter, forced_count,
-					print 'without', sn, 'with', sb
 			# the queue cannot be empty here
 			self._now, event, entity = self._pq.pop()
 
@@ -176,31 +183,41 @@ class Simulator(object):
 			# before changing the state of the system.
 			diff = self._now - prev_event
 			if diff:
-				virt_second = self._virt_first_stage(diff, event)
-				self._real_first_stage(diff, event)
+				self._virt_first_stage(diff)
+				self._real_first_stage(diff)
+			# The default flow is to redistribute the virtual
+			# time and compute new campaign ends (and maybe do
+			# a scheduling / backfilling pass in the between).
+			virt_second = True
+			campaigns = True
 
 			if event == Events.new_job:
 				# check if the job is runnable
 				if self._manager.sanity_test(entity):
 					self._new_job_event(entity)
+					schedule = True
 				else:
-					#TODO PRINT MA BYC
 					#print 'WARNING: job', job.ID, 'can never run'
 					end_iter += 1
-				schedule = campaigns = True
 				sub_count -= 1
 			elif event == Events.job_end:
 				self._job_end_event(entity)
 				end_iter += 1
-				schedule = campaigns = True
+				schedule = True
 			elif event == Events.estimate_end:
 				self._estimate_end_event(entity)
-				campaigns = True
+			elif event == Events.bf_run:
+				backfill = True
 			elif event == Events.campaign_end:
+				# We need to redistribute beforehand
+				# so the campaign can actually end.
+				self._virt_second_stage()
+				virt_second = False  # already done
 				campaigns = self._camp_end_event(entity)
 			elif event == Events.force_decay:
-				pass
-				forced_count += 1 #TODO DELETE
+				diag.forced += 1
+				virt_second = False  # no need to do it now
+				campaigns = False  # no change to campaign ends
 			else:
 				raise Exception('unknown event')
 
@@ -213,68 +230,65 @@ class Simulator(object):
 				# before we can continue further.
 				next_time, next_event, _ = self._pq.peek()
 				if (next_time == self._now and
-				    next_event < Events.campaign_end):
+				    next_event < Events.bf_run):
 					continue
 
 			if virt_second:
 				self._virt_second_stage()
-				virt_second = False
 
 			if schedule:
-				if self._now > last_bf + 300:
-					self._schedule(self._settings.bf_depth)
-					sb += 1
-					last_bf = (self._now / 300) * 300
-				else:
-					self._schedule(0)
-					sn += 1
+				diag.sched_pass += 1
+				diag.sched_jobs += self._schedule(bf_mode=False)
 				schedule = False
+				self._print_utility()  # add results
+
+			if backfill:
+				diag.bf_pass += 1
+				exec_jobs = self._schedule(bf_mode=True)
+				diag.bf_jobs += exec_jobs
+				backfill = False
 				self._print_utility()  # add results
 
 			if campaigns:
 				self._update_camp_estimates()
-				campaigns = False
+
+			# add periodically occurring events
+			if event < Events.bf_run:
+				self._next_backfill(self._now)
+			elif event == Events.bf_run and exec_jobs:
+				self._next_backfill(self._now + 1)
 
 			if end_iter < sub_total:
 				# There are still jobs in the simulation
 				# so we need an accurate usage.
-				self._force_next_decay()
+				assert not self._pq.empty(), 'infinite loop'
+				self._next_force_decay()
 
-		# add more results
+		# cleanup
+		self._parts.scheduler.clear_stats()
+
+		# add the rest of the results
 		assert not self._waiting_jobs, 'waiting jobs left'
-		assert not self._cpu_used, 'running jobs left'
+		assert not self._stats.cpu_used, 'running jobs left'
 		for u in self._users.itervalues():
 			for i, c in enumerate(u.completed_camps):
 				assert i == c.ID, 'invalid campaign ordering'
 				assert not c.time_left, 'workload left'
-				assert not c.active_jobs, 'active jobs'
 				self._print_camp_ended(c)
 			assert u._camp_count == len(u.completed_camps), \
-			  'missing camps'
-			assert not u.active_camps, 'active campaigns'
-			assert not u.active_jobs, 'active jobs'
+			    'missing camps'
 			self._print_user_stats(u)
-		# return everything
-		print "FORCED COUNT", forced_count
-		return self._results
 
-	def _virt_first_stage(self, period, event):
+		return self._results, misc
+
+	def _virt_first_stage(self, period):
 		"""
 		In the first virtual stage we just distribute
 		the virtual time for the period to active users.
-
-		Return if `_virtual_second_stage` is needed.
 		"""
 		for u in self._users.itervalues():
 			if u.active:
 				u.add_virtual(period * self._share_cpu_value(u))
-
-		if event < Events.campaign_end:
-			return True
-		elif event == Events.campaign_end:
-			# need it right away
-			self._virt_second_stage()
-		return False
 
 	def _virt_second_stage(self):
 		"""
@@ -285,7 +299,7 @@ class Simulator(object):
 			if u.active:
 				u.virtual_work()
 
-	def _real_first_stage(self, period, event):
+	def _real_first_stage(self, period):
 		"""
 		Update the real work done by the jobs in the period
 		and apply the rolling decay.
@@ -295,8 +309,8 @@ class Simulator(object):
 		# calculate the decay factor for the period
 		real_decay = self._decay_factor ** period
 		# update global statistics
-		self._total_usage += self._cpu_used * period
-		self._total_usage *= real_decay
+		self._stats.total_usage += self._stats.cpu_used * period
+		self._stats.total_usage *= real_decay
 		# and update users usage
 		for u in self._users.itervalues():
 			u.real_work(period, real_decay)
@@ -307,9 +321,9 @@ class Simulator(object):
 		for the *active* user.
 		"""
 		assert user.active, 'inactive user'
-		share = float(user.shares) / self._active_shares
+		share = float(user.shares) / self._stats.active_shares
 		# this will guarantee that the campaigns will eventually end
-		cpus = max(self._cpu_used, 1)
+		cpus = max(self._stats.cpu_used, 1)
 		return share * cpus
 
 	def _queue_camp_end(self, camp):
@@ -317,9 +331,9 @@ class Simulator(object):
 		Create the `campaign_end` event and insert it to the queue.
 		"""
 		est = camp.time_left / self._share_cpu_value(camp.user)
-		est = self._now + int(math.ceil(est))  # must be int
+		est = self._now + math.ceil(est)
 		self._pq.add(
-			est,
+			int(est),  # must be int
 			Events.campaign_end,
 			camp
 		)
@@ -334,14 +348,29 @@ class Simulator(object):
 			if u.active:
 				self._queue_camp_end(u.active_camps[0])
 
-	def _force_next_decay(self):
+	def _next_backfill(self, start):
+		"""
+		Add the next backfill event from `start`.
+		"""
+		if (not self._settings.bf_depth or
+		    not self._settings.bf_interval):
+			return  # backfilling turned off
+		next = float(start) / self._settings.bf_interval
+		next = math.ceil(next) * self._settings.bf_interval
+		self._pq.add(
+			int(next),  # must be int
+			Events.bf_run,
+			'Bf event'
+		)
+
+	def _next_force_decay(self):
 		"""
 		Add/update the next decay event.
 		"""
 		self._pq.add(
 			self._now + self._force_period,
 			Events.force_decay,
-			'Dummy event'
+			'Force event'
 		)
 
 	@property
@@ -349,85 +378,85 @@ class Simulator(object):
 		"""
 		Cluster usage.
 		"""
-		ut = float(self._cpu_used) / self._cpu_limit
+		ut = float(self._stats.cpu_used) / self._stats.cpu_limit
 		return round(ut, 3)
 
 	@property
 	def _cpu_free(self):
 		"""
-		A simple auto-updating property.
+		Free CPUs.
 		"""
-		return self._cpu_limit - self._cpu_used
+		return self._stats.cpu_limit - self._stats.cpu_used
 
-	def _schedule(self, bf_limit):
+	def _execute(self, job):
 		"""
-		Try to execute the highest priority jobs from
-		the `_waiting_jobs` list.
+		Start the job execution.
+		"""
+		job.start_execution(self._now)
+		# update stats
+		self._stats.cpu_used += job.proc
+		assert self._cpu_free >= 0, 'invalid cpu count'
+		# add events
+		self._pq.add(
+			self._now + job.run_time,
+			Events.job_end,
+			job
+		)
+		if job.estimate < job.run_time:
+			self._pq.add(
+				self._now + job.estimate,
+				Events.estimate_end,
+				job
+			)
+
+	def _schedule(self, bf_mode):
+		"""
+		Try to execute the highest priority jobs.
+
+		If not in `bf_mode` stop on the first failure.
+
+		Return the number of started jobs.
 		"""
 
 		if not self._cpu_free or not self._waiting_jobs:
-			# nothing to do
-			return
+			return 0  # nothing to do
 
 		#sort the jobs using the ordering defined by the scheduler
-		self._parts.scheduler.update_stats({
-			'cpu_used': self._cpu_used,
-			'active_shares': self._active_shares,
-			'total_usage': self._total_usage
-		})
 		self._waiting_jobs.sort(
 			key=self._parts.scheduler.job_priority_key,
 			reverse=True
 		)
 
-		self._manager.prepare(self._now)
+		if bf_mode:
+			self._manager.prepare_backfill(self._now)
+			try_func = self._manager.try_backfill
 
-		bf_mode = False
-		bf_checked = 0
+			assert self._settings.bf_depth, 'invalid bf_depth'
+			work = min(len(self._waiting_jobs), self._settings.bf_depth)
+		else:
+			try_func = self._manager.try_schedule
+			work = len(self._waiting_jobs)
 
 		# last job has the highest priority
 		prio_iter = len(self._waiting_jobs) - 1
+		started = 0
 
-		while self._cpu_free and prio_iter >= 0:
+		while self._cpu_free and work:
 			job = self._waiting_jobs[prio_iter]
 
-			run = self._manager.try_schedule(job)
-			if run:
-				# remove from queue
+			if try_func(job):
 				j2 = self._waiting_jobs.pop(prio_iter)
 				assert job == j2, 'scheduled wrong job'
 
-				# update stats
-				job.start_execution(self._now)
-				self._cpu_used += job.proc
-				assert self._cpu_free >= 0, 'invalid cpu count'
+				self._execute(job)
+				started += 1
+				debug_print('Bf_mode', bf_mode, 'started', job)
+			elif not bf_mode:
+				break
 
-				# add events
-				self._pq.add(
-					self._now + job.run_time,
-					Events.job_end,
-					job
-				)
-				if job.estimate < job.run_time:
-					self._pq.add(
-						self._now + job.estimate,
-						Events.estimate_end,
-						job
-					)
-				debug_print('Started', job, 'bf == ', bf_mode)
-			else:
-				bf_mode = True
-				debug_print('Reserved', job)
-
-			# go to next job by priority
 			prio_iter -= 1
-			# stop if the backfilling checked enough jobs
-			if bf_mode:
-				bf_checked += 1
-				if bf_checked > bf_limit:
-					break
-		# cleanup
-		self._manager.clear_reservations()
+			work -= 1
+		return started
 
 	def _new_job_event(self, job):
 		"""
@@ -437,7 +466,7 @@ class Simulator(object):
 
 		if not user.active:
 			# user is now active after this job submission
-			self._active_shares += user.shares
+			self._stats.active_shares += user.shares
 
 		job.estimate = self._parts.estimator.initial_estimate(job)
 		camp = self._parts.selector.find_campaign(job)
@@ -458,8 +487,8 @@ class Simulator(object):
 		assert job.estimate >= job.run_time, 'invalid estimate'
 		job.execution_ended(self._now)
 		self._manager.job_ended(job)
-		self._cpu_used -= job.proc
-		assert self._cpu_used >= 0, 'invalid cpu count'
+		self._stats.cpu_used -= job.proc
+		assert self._stats.cpu_used >= 0, 'invalid cpu count'
 		self._print_job_ended(job)  # add results
 
 	def _estimate_end_event(self, job):
@@ -472,7 +501,7 @@ class Simulator(object):
 		if not user.active:
 			# user became inactive due to inaccurate estimates
 			user.false_inactivity += (self._now - user.last_active)
-			self._active_shares += user.shares
+			self._stats.active_shares += user.shares
 
 		new_est = self._parts.estimator.next_estimate(job)
 		job.next_estimate(new_est)
@@ -510,9 +539,9 @@ class Simulator(object):
 		if not user.active:
 			# user became inactive
 			user.last_active = self._now
-			self._active_shares -= user.shares
-			# fix rounding errors
-			self._active_shares = max(self._active_shares, 0)
+			self._stats.active_shares -= user.shares
+			# fix possible rounding errors
+			self._stats.active_shares = max(self._stats.active_shares, 0)
 			# we need new estimates, because shares changed
 			return True
 		else:

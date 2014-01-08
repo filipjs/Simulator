@@ -111,9 +111,14 @@ class BaseManager(object):
 		"""
 		raise NotImplemented
 
-	def prepare(self, now):
+	def try_schedule(self, job):
 		"""
-		Prepare the node manager for the next scheduling pass.
+		"""
+		pass
+
+	def prepare_backfill(self, now):
+		"""
+		Prepare the manager for the upcoming backfilling pass.
 		"""
 		self._reservations = 0
 		self._now = now
@@ -121,8 +126,9 @@ class BaseManager(object):
 		self._space_list.length = self._space_list.end - now
 		#self._space_list.update()
 		assert self._space_list.length > 0, 'some finished jobs not removed'
+		self._manager.clear_reservations()#TODO CLEANUP ROBIC W PREPARE
 
-	def try_schedule(self, job):
+	def try_backfill(self, job):
 		"""
 		Make a reservation for the job.
 		Return if the job can be executed immediately.

@@ -12,7 +12,7 @@ from core import parsers, simulator
 from parts import settings
 
 
-PROFILE_FLAG = True
+PROFILE_FLAG = False#True
 
 
 ##
@@ -232,8 +232,8 @@ def run(workload, args):
 
 	async_results = {sched: [None] * len(blocks)
 			 for sched in part_conf.schedulers}
-#TODO DO MSG DAC JOB COUNT + MARGIN COUNT
-	block_msg = 'Block {:3}) {} scheduler {} jobs {} CPUs'
+
+	block_msg = 'Block {:3}) {} scheduler {} jobs {} margin jobs {} CPUs'
 	global_start = time.time()
 
 	print '-' * 50
@@ -270,8 +270,9 @@ def run(workload, args):
 			part_conf.scheduler = sched
 
 			params = (job_slice, nodes, margins, alg_conf, part_conf)
-			msg = block_msg.format(num, sched.__class__.__name__,
-					       len(job_slice), cpus)
+			jcount = b['last'] - b['first'] + 1
+			mcount = b['right'] - b['left'] + 1 - jcount
+			msg = block_msg.format(num, sched, jcount, mcount, cpus)
 
 			if not PROFILE_FLAG:
 				async_r = my_pool.apply_async(simulate_block, params)
@@ -288,7 +289,7 @@ def run(workload, args):
 		time_stamp = time.localtime(global_start)
 		filename = '{}-{}-{}'.format(
 			sim_conf.title,
-			sched.__class__.__name__,
+			sched,
 			time.strftime('%b-%d-%H:%M', time_stamp)
 		)
 		filename = os.path.join(sim_conf.output, filename)
@@ -302,6 +303,7 @@ def run(workload, args):
 			r, speed = async_r.get(timeout=60*60*24*365)
 			print '  Simulation time', speed
 			# save partial results to file
+			f.write('NEXT BLOCK\n')
 			f.writelines( '%s\n' % line for line in r )
 
 		f.close()
