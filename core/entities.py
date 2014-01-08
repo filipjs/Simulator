@@ -210,10 +210,6 @@ class User(object):
 		self.completed_camps = []
 		self._camp_count = 0
 
-	@property
-	def active(self):
-		return bool(self.active_camps)
-
 	def add_virtual(self, value):
 		"""
 		Add the `value` long period to the virtual pool,

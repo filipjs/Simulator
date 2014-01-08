@@ -13,7 +13,7 @@ from parts import settings
 
 
 PROFILE_FLAG = True
-PROFILE_FLAG = False
+#PROFILE_FLAG = False
 
 
 ##
@@ -188,11 +188,11 @@ def print_stats(diag):
 	"""
 	# change some stats to percentages
 	diag.bf_jobs *= 100
-	diag.sched_jobs *= 100
 	diag.avg_util *= 100
 
-	diag_msg = """  Backfilled jobs {bf_jobs:.2f}% sched jobs {sched_jobs:.2f}%
-  Avg utilization {avg_util:.2f}% backfill loops {bf_pass} sched loops {sched_pass}
+	diag_msg = """\
+  Backfilled jobs {bf_jobs:.2f}%, average utilization {avg_util:.2f}%
+  Backfill loops {bf_pass}, sched loops {sched_pass}
   Simulation time {sim_time:.2f} decay events {forced}"""
 	print diag_msg.format(**diag.__dict__)
 
@@ -209,14 +209,14 @@ def simulate_block(block, nodes, alg_conf, part_conf):
 	for u in users.itervalues():
 		u.reset()
 
-	my_simulator = simulator.Simulator(block, users, nodes,
-					   alg_conf, part_conf)
+	my_sim = simulator.Simulator(block, users, nodes,
+				     alg_conf, part_conf)
 
 	if not PROFILE_FLAG:
-		return my_simulator.run()
+		return my_sim.run()
 	else:
 		import cProfile
-		cProfile.runctx('print my_simulator.run()[1]',
+		cProfile.runctx('print my_sim.run()[1].__dict__',
 				globals(), locals(),
 				sort='cumulative')
 
@@ -277,8 +277,8 @@ def run(workload, args):
 		async_results = {sched: [None] * len(blocks)
 				 for sched in part_conf.schedulers}
 
-	block_msg = 'Block {:2} (first id {}): {} scheduler {} jobs' \
-		    ' (inc. {} margin jobs) {} CPUs'
+	block_msg = 'Block {:2} (first id {}): {} scheduler, {} jobs' \
+		    ' (inc. {} margin jobs), {} CPUs'
 	if not sim_conf.cpu_count:
 		block_msg += ' ({}-th percentile)'.format(sim_conf.cpu_percent)
 

@@ -305,7 +305,7 @@ class Simulator(object):
 		the virtual time for the period to active users.
 		"""
 		for u in self._users.itervalues():
-			if u.active:
+			if u.active_camps:
 				u.add_virtual(period * self._share_cpu_value(u))
 
 	def _virt_second_stage(self):
@@ -314,7 +314,7 @@ class Simulator(object):
 		the accumulated virtual time.
 		"""
 		for u in self._users.itervalues():
-			if u.active:
+			if u.active_camps:
 				u.virtual_work()
 
 	def _real_first_stage(self, period):
@@ -338,7 +338,7 @@ class Simulator(object):
 		Calculate the share of the available resources
 		for the *active* user.
 		"""
-		assert user.active, 'inactive user'
+		assert user.active_camps, 'inactive user'
 		share = float(user.shares) / self._stats.active_shares
 		# this will guarantee that the campaigns will eventually end
 		cpus = max(self._stats.cpu_used, 1)
@@ -363,7 +363,7 @@ class Simulator(object):
 		since the subsequent campaigns are guaranteed to end later.
 		"""
 		for u in self._users.itervalues():
-			if u.active:
+			if u.active_camps:
 				self._queue_camp_end(u.active_camps[0])
 
 	def _next_backfill(self, start):
@@ -486,7 +486,7 @@ class Simulator(object):
 		"""
 		user = job.user
 
-		if not user.active:
+		if not user.active_camps:
 			# user is now active after this job submission
 			self._stats.active_shares += user.shares
 
@@ -520,7 +520,7 @@ class Simulator(object):
 		assert job.estimate < job.run_time, 'invalid estimate'
 		user = job.user
 
-		if not user.active:
+		if not user.active_camps:
 			# user became inactive due to inaccurate estimates
 			user.false_inactivity += (self._now - user.last_active)
 			self._stats.active_shares += user.shares
@@ -558,13 +558,13 @@ class Simulator(object):
 			ended = user.active_camps.pop(0)
 			user.completed_camps.append(ended)
 
-		if not user.active:
+		if not user.active_camps:
 			# user became inactive
 			user.last_active = self._now
 			self._stats.active_shares -= user.shares
 			# fix possible rounding errors
 			self._stats.active_shares = max(self._stats.active_shares, 0)
-			# we need new estimates, because shares changed
+			# we need new estimates, because the shares changed
 			return True
 		else:
 			self._queue_camp_end(user.active_camps[0])
