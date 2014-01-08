@@ -183,6 +183,20 @@ def make_classes(name, conf, modules=[]):
 		raise Exception('class not found: ' + name)
 
 
+def print_stats(diag):
+	"""
+	"""
+	# change some stats to percentages
+	diag.bf_jobs *= 100
+	diag.sched_jobs *= 100
+	diag.avg_util *= 100
+
+	diag_msg = """  Backfilled jobs {bf_jobs:.2f}% sched jobs {sched_jobs:.2f}%
+  Avg utilization {avg_util:.2f}% backfill loops {bf_pass} sched loops {sched_pass}
+  Simulation time {sim_time:.2f} decay events {forced}"""
+	print diag_msg.format(**diag.__dict__)
+
+
 def simulate_block(block, nodes, alg_conf, part_conf):
 	"""
 	"""
@@ -325,8 +339,8 @@ def run(workload, args):
 		for async_r, msg in sim_results:
 			print msg
 			# ctr-c doesn't seem to work without timeout
-			r, speed = async_r.get(timeout=60*60*24*365)
-			print '  Simulation time', speed.__dict__
+			r, diag = async_r.get(timeout=60*60*24*365)
+			print_stats(diag)
 			# save partial results to file
 			f.write('NEXT BLOCK\n')
 			f.writelines( '%s\n' % line for line in r )
@@ -335,7 +349,7 @@ def run(workload, args):
 		print 'Saving results COMPLETED.', filename
 
 	print 'Simulation COMPLETED. Total run time',
-	print round(time.time() - global_start, 3)
+	print round(time.time() - global_start, 2)
 	print '-' * 50
 
 

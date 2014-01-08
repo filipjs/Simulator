@@ -167,7 +167,7 @@ class Simulator(object):
 		diag.bf_pass = diag.bf_jobs = 0
 		diag.prev_util = (prev_event, 0)  # <time, utility>
 		diag.avg_util = 0
-		diag.run_time = time.time()
+		diag.sim_time = time.time()
 
 		while sub_iter < sub_total or not self._pq.empty():
 			# We only need to keep two `new_job` events in the
@@ -278,7 +278,11 @@ class Simulator(object):
 		true_end = min(diag.prev_util[0], self._core_period[1])
 		del diag.prev_util
 		diag.avg_util /= (true_end - self._core_period[0])
-		diag.run_time = round(time.time() - diag.run_time, 3)
+
+		diag.sim_time = time.time() - diag.sim_time
+
+		diag.sched_jobs /= float(sub_total)
+		diag.bf_jobs /= float(sub_total)
 
 		# add the rest of the results
 		for u in self._users.itervalues():
@@ -287,7 +291,6 @@ class Simulator(object):
 				assert not c.time_left, 'workload left'
 				self._store_camp_ended(c)
 			self._store_user_stats(u)
-
 		self._store_system(diag)
 
 		# cleanup
@@ -393,8 +396,7 @@ class Simulator(object):
 		"""
 		Cluster usage.
 		"""
-		ut = float(self._stats.cpu_used) / self._stats.cpu_limit
-		return round(ut, 3)
+		return float(self._stats.cpu_used) / self._stats.cpu_limit
 
 	@property
 	def _cpu_free(self):
@@ -580,7 +582,6 @@ class Simulator(object):
 			prev = max(prev, core_st)
 			now = min(self._now, core_end)
 			diag.avg_util += (now - prev) * ut
-
 		diag.prev_util = (self._now, self._utility)
 
 	def _store_msg(self, event_time, msg):
@@ -599,7 +600,7 @@ class Simulator(object):
 		Event message:
 		  UTILITY time value
 		"""
-		msg = 'UTILITY {} {}'.format(self._now, self._utility)
+		msg = 'UTILITY {} {:.4f}'.format(self._now, self._utility)
 		self._store_msg(self._now, msg)
 
 	def _store_camp_created(self, camp):
@@ -607,7 +608,7 @@ class Simulator(object):
 		Event message:
 		  CAMPAIGN START camp_id user_id time utility
 		"""
-		msg = 'CAMPAIGN START {} {} {} {}'.format(
+		msg = 'CAMPAIGN START {} {} {} {:.4f}'.format(
 			camp.ID, camp.user.ID, camp.created, self._utility)
 		self._store_msg(camp.created, msg)
 
@@ -642,4 +643,14 @@ class Simulator(object):
 		msg = 'USER {} {} {} {}'.format(
 			user.ID, len(user.completed_camps),
 			user.lost_virtual, user.false_inactivity)
+		self._results.append('CORE ' + msg)
+
+	def _store_system(self, diag):
+		"""
+		Event message:
+		  SYSTEM sched_iterations sched_jobs bf_iterations bf_jobs
+		         average_core_utility simulation_time forced_events
+		"""
+		msg = 'SYSTEM {sched_pass} {sched_jobs} {bf_pass} {bf_jobs}' \
+		      '{avg_util:.4f} {sim_time:.2f} {forced}'.format(**diag.__dict__)
 		self._results.append('CORE ' + msg)
