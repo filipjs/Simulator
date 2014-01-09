@@ -8,7 +8,7 @@ import multiprocessing
 import os
 import sys
 import time
-from core import parsers, simulator
+from core import parsers, simulator, spec_sim
 from parts import settings
 
 
@@ -199,13 +199,14 @@ def print_stats(diag):
 	print diag_msg.format(**diag.__dict__)
 
 
-def simulate_block(block, nodes, alg_conf, part_conf):
+def simulate_block(block, nodes, sched, alg_conf, part_conf):
 	"""
 	Do a simulation on the specified block.
 
 	Args:
 	  block: `Block` with `Jobs`.
 	  nodes: the cluster node configuration.
+	  sched: selected scheduler from part_conf.schedulers.
 	  alg_conf: algorithmic settings.
 	  part_conf: parts instances.
 
@@ -223,8 +224,16 @@ def simulate_block(block, nodes, alg_conf, part_conf):
 	for u in users.itervalues():
 		u.reset()
 
-	my_sim = simulator.Simulator(block, users, nodes,
-				     alg_conf, part_conf)
+	part_conf.scheduler = sched
+	params = (block, users, nodes, alg_conf, part_conf)
+
+	assert not (sched.only_virtual and sched.only_real), 'invalid sched settings'
+	if sched.only_virtual:
+		my_sim = spec_sim.VirtualSimulator(*params)
+	elif sched.only_real:
+		my_sim = spec_sim.RealSimulator(*params)
+	else:
+		my_sim = simulator.GeneralSimulator(*params)
 
 	if not PROFILE_FLAG:
 		return my_sim.run()
@@ -320,12 +329,9 @@ def run(workload, args):
 			nodes = {0: cpus}
 
 		for sched in part_conf.schedulers:
-			# set the current scheduler
-			part_conf.scheduler = sched
-
-			params = (bl, nodes, alg_conf, part_conf)
 			msg = block_msg.format(bl.number, bl[0].ID, sched,
 					       len(bl), bl.margin_count, cpus)
+			params = (bl, nodes, sched, alg_conf, part_conf)
 
 			if not PROFILE_FLAG:
 				async_r = my_pool.apply_async(simulate_block, params)
@@ -360,7 +366,7 @@ def run(workload, args):
 			f.writelines( '%s\n' % line for line in r )
 
 		f.close()
-		print 'Saving results COMPLETED.', filename
+		print 'Saving results COMPLETED. File', filename
 
 	print 'Simulation COMPLETED. Total run time',
 	print round(time.time() - global_start, 2)

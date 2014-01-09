@@ -18,9 +18,19 @@ class BaseScheduler(object):
 	1) job_priority_key
 
 	You can access the `Settings` using `self._settings`.
+
+	Note:
+	  You can also change the value of `only_virtual` or `only_real`
+	  if your scheduler is only using information about virtual campaigns
+	  or user/system CPU usage, respectively.
+	  This can result in about 10%-30% faster simulation.
+
 	"""
 
 	__metaclass__ = ABCMeta
+
+	only_virtual = False
+	only_real = False
 
 	def __init__(self, settings):
 		"""
@@ -66,6 +76,8 @@ class OStrich(BaseScheduler):
 	Default implementation of the OStrich algorithm.
 	"""
 
+	only_virtual = True
+
 	def job_priority_key(self, job):
 		"""
 		Priority ordering for the scheduler:
@@ -91,6 +103,8 @@ class Fairshare(BaseScheduler):
 	"""
 	SLURM implementation of the fairshare algorithm.
 	"""
+
+	only_real = True
 
 	def job_priority_key(self, job):
 		"""

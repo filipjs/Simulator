@@ -97,7 +97,7 @@ class Container(object):
 	pass
 
 
-class Simulator(object):
+class GeneralSimulator(object):
 	"""
 	Defines the flow of the simulation.
 	Simultaneously maintains statistics about
@@ -270,18 +270,16 @@ class Simulator(object):
 				scheduled_jobs = self._schedule(bf_mode=False)
 				self._diag.sched_jobs += scheduled_jobs
 				self._diag.sched_pass += 1
-				self._update_diag_util() # after schedule
+				self._update_util() # after schedule
 				schedule = False
 				if instant_bf: backfill = True
-				self._store_utility()  # add results
 
 			if backfill:
 				backfilled_jobs = self._schedule(bf_mode=True)
 				self._diag.bf_jobs += backfilled_jobs
 				self._diag.bf_pass += 1
-				self._update_diag_util()  # after schedule
+				self._update_util()  # after schedule
 				backfill = False
-				self._store_utility()  # add results
 
 			if campaigns:
 				self._update_camp_estimates()
@@ -582,7 +580,7 @@ class Simulator(object):
 			# shares still the same
 			return False
 
-	def _update_diag_util(self):
+	def _update_util(self):
 		"""
 		Keep track of the system average utility.
 		"""
@@ -593,6 +591,7 @@ class Simulator(object):
 			prev = max(prev, core_st)
 			now = min(self._now, core_end)
 			self._diag.avg_util += (now - prev) * ut
+			self._store_utility(now, self._utility)  # add results
 		self._diag.prev_util = (self._now, self._utility)
 
 	def _store_msg(self, event_time, event_msg):
@@ -606,13 +605,13 @@ class Simulator(object):
 			prefix = 'MARGIN '
 		self._results.append(prefix + event_msg)
 
-	def _store_utility(self):
+	def _store_utility(self, time, val):
 		"""
 		Event message:
 		  UTILITY time value
 		"""
-		msg = 'UTILITY {} {:.4f}'.format(self._now, self._utility)
-		self._store_msg(self._now, msg)
+		msg = 'UTILITY {} {:.4f}'.format(time, val)
+		self._results.append('CORE ' + msg)
 
 	def _store_camp_created(self, camp):
 		"""
