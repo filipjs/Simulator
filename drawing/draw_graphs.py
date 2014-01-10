@@ -62,6 +62,9 @@ class Campaign(object):
 		length = float(self.end - self.start)
 		return round(length / lower_bound, 2)
 
+	def __repr__(self):
+		return '{} {} {}'.format(len(self.jobs), self.workload, self.stretch)
+
 	#@property
 	#def x_key(self):
 		#return "({} {} {})".format(self.user, self.ID, self.runtime)
@@ -92,6 +95,9 @@ class User(object):
 		avg = total / len(self.camps)
 		return round(avg, 2)
 
+	def __repr__(self):
+		return '{} {}'.format(self.camps, self.stretch)
+
 	#@property
 	#def x_key(self):
 		#return "({} {} {})".format(self.ID, len(self.camps), self.runtime)
@@ -105,37 +111,35 @@ def _get_color(i):
 	#c = ['r', '0.0', '0.4']
 	return c[i]
 
-def cdf(data, key, **kwargs):
+
+def cdf(simulations, key, **kwargs):
 	""" Stretch CDF """
+
 	plt.xlabel('stretch')
 	plt.ylabel('fraction of ' + key)
 
 	plt.xscale('log', subsx=[])
-	plt.axis([1, 800, 0.3, 1])
-	plt.xticks([1, 10, 100, 500], [1, 10, 100, 500])
+	plt.axis([1, 250, 0.3, 1])
+	plt.xticks([1, 10, 100], [1, 10, 100])
 
-	for i in range(3):
+	for i, (sim, data) in enumerate(simulations.iteritems()):
 		values = {}
-		act, total = 0.0, 0
 
-		for sim in data:
-			d = sim[i]
-
-			for ele in d[key]:
-				values[ele.stretch] = values.pop(ele.stretch, 0) + 1
-
-			total += len(d[key])
+		for ele in data[key]:
+			values[ele.stretch] = values.pop(ele.stretch, 0) + 1
 
 		values = sorted(values.items(), key=lambda x: x[0])
 		x, y = [], []
+		act = 0.0
+		total = len(data[key])
 
-		for p, k in values:
-			act += k
-			x.append(p)
+		for stretch, count in values:
+			act += count
+			x.append(stretch)
 			y.append(act/total)
 
-		plt.plot(x, y, color=_get_color(i),
-				label=_get_label(i), lw=2)
+		plt.plot(x, y, color=_get_color(i), label=sim)
+
 
 def job_runtime(data, key, **kwargs):
 	""" Stretch CDF """
@@ -167,8 +171,12 @@ def job_runtime(data, key, **kwargs):
 		plt.plot(x, y, color=_get_color(i), lw=2)
 				#label=_get_label(i), lw=2)
 
-def diff_heat(data, key, **kwargs):
+def diff_heat(simulations, key, **kwargs):
 	""" Heatmap """
+
+	if len(simulations) != 2:
+		print 'Difference heatmap only from two plots'
+		return
 
 	max_y = 10
 
@@ -177,31 +185,21 @@ def diff_heat(data, key, **kwargs):
 		ut = (i*5) / 100.
 		v[ut] = {j/10.:0 for j in range(1, max_y * 10 + 1)} # stretch <1, max_y> co 0.1
 
-	for i in range(2):
+	for i, (sim, data) in enumerate(simulations.iteritems()):
 
 		if i == 0:
 			m = -1	# ostr
 		else:
 			m = +1	# fair
 
-		for sss, sim in enumerate(data):
-			print "camp", sss
+		for c in data['campaigns']:
+			ut = c.utility
+			ut = max(ut, 0.51)
+			ut = math.ceil(ut * 20.) / 20.
 
-			d = sim[i]
+			s = math.ceil(c.stretch * 10.) / 10.
 
-			cpus = d['context']['cpus']
-
-			for c in d['campaigns']:
-				#act_jobs = sum(map(lambda j: j.active_cpus(c.start), d['jobs']))
-				#ut = act_jobs/float(cpus)
-
-				ut = c.utility
-				ut = max(ut, 0.51)
-				ut = math.ceil(ut * 20.) / 20.
-
-				s = math.ceil(c.stretch * 10.) / 10.
-
-				v[ut][min(max_y, s)] += m
+			v[ut][min(max_y, s)] += m
 
 	v = sorted(v.items(), key=lambda x: x[0])		# sort by utility
 
@@ -243,35 +241,21 @@ def _label_values(bars, max_y):
 				plt.text(rect.get_x(), max_y, '%d'%int(height),
 							va='bottom', ha=direction)
 
-def weighted(data, key, **kwargs):
-	"""// Campaigns Weighted Average """
+def average(simulations, key, **kwargs):
+	"""// Campaigns Average Stretch """
 
-	#plt.axis([60, 140, 0, 25])
-	plt.axis([0, 137, 0, 60])
-	#plt.axis([0, 140, 0, 60])
-	#plt.xticks([])
 	plt.xlabel('users')
 	plt.ylabel('stretch')
 
-	for i in range(3):
-		users = {}
-		for sim in data:
-			d = sim[i]
+	for i, (sim, data) in enumerate(simulations.iteritems()):
 
-			for c in d['campaigns']:
-				u = users.pop(c.user, [])
-				u.append(c)
-				users[c.user] = u
-
-		users = [User(camp_list, None) for camp_list in users.values()]
-
-		ustr = map(lambda u: u.stretch, users)
-		y = sorted(ustr)
-		#y = ustr
+		y = map(lambda u: u.stretch, data['users'].itervalues())
+		y.sort()
 		x = range(len(y))
 
-		plt.plot(x, y, color=_get_color(i),
-			label=_get_label(i), lw=2)
+		plt.plot(x, y, color=_get_color(i), label=sim)
+	plt.axis([0, len(y), 0, 100])
+
 
 def _runtime_func(job):
 	real = int(job.runtime * job.ctx['time_scale'])
@@ -343,48 +327,27 @@ def std(data, key, f):
 	plt.axis([0, ele_count * step + 1, 0, max_y])
 	_label_values(bars, max_y)
 
-def utility(data, key, base):
+
+def utility(simulations, key, **kwargs):
 	""" Utility """
-	v = base or data[0]
 
-	cpus = v['context']['cpus']
-	values = v['jobs']
+	max_st = 0
+	min_end = float('inf')
 
-	st = min(map(lambda j: j.start, values))
-	end = max(map(lambda j: j.end, values))
+	for i, (sim, data) in enumerate(simulations.iteritems()):
+		sparse = data['utility'][::100]
+		x, y = zip(*sparse)
+		print len(x)
 
-	x, y = [], []
+		max_st = max(max_st, x[0])
+		min_end = min(min_end, x[-1])
 
-	for t in xrange(st, end, 10):
-		act_jobs = sum(map(lambda j: j.active_cpus(t), values))
-
-		x.append(t - st)
-		y.append(len(act_jobs)/float(cpus))
-
-	plt.plot(x, y, 'r-', label=str(cpus) + ' cpus')
+		plt.plot(x, y, color=_get_color(i), label=sim)
 
 	plt.xlabel('time')
-	plt.axis([0, end, 0, 1])
+	plt.xticks([])
+	plt.axis([max_st, min_end, 0, 1])
 
-def area(data, key, base):
-	"""// Jobs Total Runtime """
-	v = base or data[0]
-	values = v['users']
-
-	scale = v['context']['time_scale']
-	y_desc = 60 * 60	# 1 hour
-
-	x = np.arange(len(values))
-	x_desc = map(lambda u: u.ID, values)
-	y = map(lambda u: u.runtime*scale/y_desc, values)
-
-	sim = v['context']['sim_time']*scale/y_desc
-
-	plt.bar(x, y, color='r', label=str(int(sim)) + 'h simulation')
-
-	plt.xticks(x, x_desc)
-	plt.xlabel('user')
-	plt.ylabel('hours')
 
 def heatmap(data):
 	""" Heatmap """
@@ -430,15 +393,6 @@ def heatmap(data):
 	plt.yticks(y_ax, map(str, y_ax/freq)[:-1] + ["10 or more"])
 	plt.ylabel('campaign stretch')
 
-
-def _find_camp(stats, jobs):
-	for i, job in enumerate(jobs):
-		if job.ID == stats[JOB_ID] and job.user == stats[USER_ID]:
-			return job.campID
-	else:
-		return None # TODO DELETE
-		print "ERROR: Job ID not found:", stats
-		sys.exit(1)
 
 def parse(filename):
 
@@ -518,51 +472,47 @@ def parse(filename):
 
 def run_draw(args):
 
-	if args.output is not None:
-		# before we start, check the output directory
-		if not os.path.isdir(args.output):
-			raise Exception('invalid output directory %s' % args.output)
+	if args.output is None:
+		out = args.logs[0].split('-')[0]
 	else:
-		import itertools
-		title = args.logs[0].split('-')[0]
-		for i in itertools.count():
-			suffix = '' if i == 0 else '(%s)' % i
-			out = title + suffix
-			if not os.path.exists(out):
-				os.mkdir(out)
-				args.output = out
-				break
+		out = args.output
 
-	data = {}
+	if not os.path.exists(out):
+		os.mkdir(out)  # doesn't exist
+	elif os.listdir(out) and not args.override:
+		# not empty and cannot override
+		raise Exception('directory already exists %s' % out)
+
+	simulations = {}
 
 	for filename in args.logs:
-		sched = filename.split('-')[1]
-		data[sched] = parse(filename)
+		sim = '{0[0]} {0[1]}'.format(
+			os.path.basename(filename).split('-'))
+		simulations[sim] = parse(filename)
 
 	# create selected graphs
 	graphs = [
-		#(cdf, "jobs", {}),
-		#(cdf, "campaigns", {}),
-		#(weighted, "users", {}),
+		(cdf, "jobs", {}),
+		(cdf, "campaigns", {}),
+		(average, "users", {}),
 		#(job_runtime, "jobs", {}),
-		#(utility, "total", {'base': base}),
+		(utility, "total", {}),
 		#(std, "runtime", {'f': _runtime_func}),
 		#(std, "user", {'f': lambda j: j.user}),
-		#(area, "user", {'base': base}),
 		#(diff_heat, "campaigns", {}),
 	]
 
-	out = "."
-
 	for i, (g, key, kwargs) in enumerate(graphs):
-		fig = plt.figure(i, figsize=(10, 7))				# size is in inches
-		g(data, key, **kwargs)								# add plots
-		#plt.legend(loc=2)									# add legend
-		#plt.title(key.capitalize() + " " + g.__doc__,
-					#y=1.05, fontsize=20)					# add title
-		fname = key.capitalize() + "_" + g.__name__ + ".pdf"
-		fig.savefig(os.path.join(out, fname),
-			format='pdf')									# save to file
+		fig = plt.figure(i, figsize=(10, 7))  # size is in inches
+
+		g(simulations, key, **kwargs)  # add plots
+		plt.legend(loc=2)  # add legend
+
+		title = '{} {}'.format(key.capitalize(), g.__doc__)
+		plt.title(title, y=1.05, fontsize=20)  # add title
+
+		fname = '{}_{}.pdf'.format(key.capitalize(), g.__name__)
+		fig.savefig(os.path.join(out, fname), format='pdf')  # save to file
 
 	if 0:
 		done = len(graphs)
@@ -584,5 +534,7 @@ if __name__=="__main__":
 	parser = argparse.ArgumentParser(description='Draw graphs from logs')
 	parser.add_argument('logs', nargs='+', help='List of log files to plot')
 	parser.add_argument('--output', help='Directory to store the plots in')
+	parser.add_argument('--override', action='store_true',
+			    help='Override the output directory')
 
 	run_draw(parser.parse_args())

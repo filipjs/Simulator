@@ -53,7 +53,7 @@ time_units = {'SEC': 1, 'MINS': 60, 'HOURS': 60*60, 'DAYS': 60*60*24}
 alg_templates = [
 	Template('threshold', 'The campaign selection threshold', 10, 'MINS',
 		 loc='VirtualSelector'),
-	Template('decay', 'The half-decay period of the CPU usage', 24, 'HOURS',
+	Template('decay', 'The half-decay period of the CPU usage', 1, 'DAYS',
 		 loc='FairshareScheduler'),
 	Template('default_limit', 'Default job time limit', 7, 'DAYS',
 		 loc='DefaultTimeSubmitter'),

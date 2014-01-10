@@ -154,6 +154,25 @@ def cpu_percentile(block, percentile):
 		raise Exception('invalid percentile %s' % percentile)
 
 
+def threshold_percentile(jobs):
+	"""
+	"""
+	last_sub = {}
+	values = []
+
+	for j in jobs:
+		last = last_sub.get(j.user.ID, j.submit)
+		values.append(j.submit - last)
+		last_sub[j.user.ID] = j.submit
+
+	values = values[len(last_sub):]
+	values.sort()
+	for i in xrange(50, 100):
+		p = i / 100.
+		inx = int(p * len(values))
+		print p, values[inx]
+
+
 def make_classes(name, conf, modules=[]):
 	"""
 	Return an instance of the class `name` from the ``parts`` package.
@@ -201,8 +220,8 @@ def print_stats(diag):
 	line2 = '    Simulation time {sim_time:.2f}s, decay events {forced}'
 
 	logging.info(line0.format(**vars(diag)))
-	logging.info(line0.format(**vars(diag)))
-	logging.info(line0.format(**vars(diag)))
+	logging.info(line1.format(**vars(diag)))
+	logging.info(line2.format(**vars(diag)))
 
 
 def simulate_block(block, nodes, sched, alg_conf, part_conf):
@@ -377,7 +396,7 @@ def run(workload, args):
 		filename = '{}-{}-{}'.format(
 			sim_conf.title,
 			sched,
-			time.strftime('%b-%d_%H-%M-%S', time_stamp)
+			time.strftime('%b%d_%H-%M', time_stamp)
 		)
 		filename = os.path.join(sim_conf.output, filename)
 
@@ -385,7 +404,7 @@ def run(workload, args):
 		f.write(str(args) + '\n')  # full parameters
 
 		for async_r, msg in sim_results:
-			print msg
+			logging.info(msg)
 			# ctr-c doesn't seem to work without timeout
 			r, diag = async_r.get(timeout=60*60*24*365)
 			print_stats(diag)
@@ -393,8 +412,9 @@ def run(workload, args):
 			f.writelines( '%s\n' % line for line in r )
 
 		f.close()
-		logging.info('Results saved to file %s' % filename)
 
+		logging.info('Results saved to file %s' % filename)
+		print '-' * 50
 	logging.info('Simulation completed. Total run time %.2f'
 		     % (time.time() - global_start))
 	print '-' * 50
