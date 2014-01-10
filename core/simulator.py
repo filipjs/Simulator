@@ -140,7 +140,7 @@ class GeneralSimulator(object):
 		self._diag.avg_util = 0
 		self._diag.sim_time = time.time()
 
-		self._results = []
+		self._results = ['CORE BLOCK']  # mark a new block start
 		self._pq = PriorityQueue()
 		# initialize the scheduler
 		self._parts.scheduler.set_stats(self._stats)
@@ -293,11 +293,14 @@ class GeneralSimulator(object):
 
 		# do the final step
 		self._finalize()
-		# and now add the rest of the results
+		# Results for each user should be in this order:
+		#  1) job ends
+		#  2) camp ends
+		#  3) user stats
 		for u in self._users.itervalues():
-			self._store_user_stats(u)
 			for i, c in enumerate(u.completed_camps):
 				self._store_camp_ended(c)
+			self._store_user_stats(u)
 		self._store_diag_stats()
 
 		return self._results, self._diag
@@ -611,10 +614,11 @@ class GeneralSimulator(object):
 	def _store_camp_created(self, camp):
 		"""
 		Event message:
-		  CAMPAIGN START camp_id user_id time utility
+		  CAMPAIGN START camp_id user_id time utility cpu_limit
 		"""
-		msg = 'CAMPAIGN START {} {} {} {:.4f}'.format(
-			camp.ID, camp.user.ID, camp.created, self._utility)
+		msg = 'CAMPAIGN START {} {} {} {:.4f} {}'.format(
+			camp.ID, camp.user.ID, camp.created,
+			self._utility, self.cpu_limit)
 		self._store_msg(camp.created, msg)
 
 	def _store_camp_ended(self, camp):
@@ -642,11 +646,12 @@ class GeneralSimulator(object):
 	def _store_user_stats(self, user):
 		"""
 		Event message:
-		  USER user_id camp_count lost_virtual_time
+		  USER user_id job_count camp_count lost_virtual_time
 		       false_inactivity_period
 		"""
 		msg = 'USER {} {} {} {}'.format(
-			user.ID, len(user.completed_camps),
+			user.ID, len(user.completed_jobs),
+			len(user.completed_camps),
 			user.lost_virtual, user.false_inactivity)
 		self._results.append('CORE ' + msg)
 

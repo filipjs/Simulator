@@ -377,7 +377,7 @@ def run(workload, args):
 		filename = '{}-{}-{}'.format(
 			sim_conf.title,
 			sched,
-			time.strftime('%b-%d-%H:%M', time_stamp)
+			time.strftime('%b-%d_%H-%M-%S', time_stamp)
 		)
 		filename = os.path.join(sim_conf.output, filename)
 
@@ -390,7 +390,6 @@ def run(workload, args):
 			r, diag = async_r.get(timeout=60*60*24*365)
 			print_stats(diag)
 			# save partial results to file
-			f.write('NEXT BLOCK\n')
 			f.writelines( '%s\n' % line for line in r )
 
 		f.close()

@@ -1,129 +1,108 @@
-#!/usr/bin/python
+#!/usr/bin/env python2
 # -*- coding: utf-8 -*-
-
+import argparse
+import math
+import matplotlib.pyplot as plt
+import numpy as np
 import os
 import sys
-import math
-import argparse
-import numpy as np
-import matplotlib.pyplot as plt
-
-# field numbers in slurmctld log files
-JOB_ID = 0
-USER_ID = 1
-CAMP_ID = 2
-SUBMIT = 3
-WAIT = 4
-RUNTIME = 5
-PROC = 6
 
 
 class Job(object):
-	def __init__(self, stats, context):
-		self.j = stats
-		self.ctx = context
-		if 'fifo' not in self.ctx['slurm_config'] and self.j[WAIT] > 0:
-			self.j[WAIT] -= 1
-			self.j[SUBMIT] += 1
-		if 'fifo' not in self.ctx['slurm_config'] and self.j[WAIT] > 0:
-			self.j[WAIT] -= 1
-			self.j[SUBMIT] += 1
-	@property
-	def user(self):
-		return self.j[USER_ID]
-	@property
-	def campID(self):
-		return self.j[CAMP_ID]
-	@property
-	def ID(self):
-		return self.j[JOB_ID]
-	@property
-	def proc(self):
-		return self.j[PROC]
-	@property
-	def start(self):
-		return self.j[SUBMIT]
-	@property
-	def runtime(self):
-		return self.j[RUNTIME]
-	@property
-	def end(self):
-		return self.j[SUBMIT] + self.j[WAIT] + self.j[RUNTIME]
-	@property
-	def stretch(self):
-		v = float(self.j[WAIT] + self.j[RUNTIME]) / self.j[RUNTIME]
+	def __init__(self, core, *args):
+		self.core = core
+		self.ID = args[0]
+		self.camp = args[1]
+		self.user = args[2]
+		self.submit = args[3]
+		self.start = args[4]
+		self.end = args[5]
+		self.estimate = args[6]
+		self.time_limit = args[7]
+		self.proc = args[8]
+		# derivative properties
+		self.run_time = self.end - self.start
+		self.wait_time = self.start - self.submit
+		# calculate stretch
+		self.stretch = self._get_stretch()
+
+	def _get_stretch(self):
+		v = float(self.run_time + self.wait_time) / self.run_time
 		return round(v, 2)
-	def active_cpus(self, t):
-		#check if job was running at time 't'
-		if self.start + self.j[WAIT] <= t < self.end:
-			return self.proc
-		return 0
+
 	def __repr__(self):
-		return u"wait {}, runtime {}".format(self.j[WAIT], self.j[RUNTIME])
+		return u"wait {}, runtime {}".format(self.wait_time, self.run_time)
+
 
 class Campaign(object):
-	def __init__(self, jobs, context):
-		self.jobs = jobs
-		self.ctx = context
-	@property
-	def user(self):
-		return self.jobs[0].user
-	@property
-	def ID(self):
-		return self.jobs[0].j[CAMP_ID]
-	@property
-	def start(self):
-		return min(map(lambda j: j.start, self.jobs))
-	@property
-	def runtime(self):
-		return sum(map(lambda j: j.runtime, self.jobs))
-	@property
-	def end(self):
-		return max(map(lambda j: j.end, self.jobs))
-	@property
-	def stretch(self):
-		avg = float(self.runtime) / self.ctx['cpus']
-		longest = max(map(lambda j: j.runtime, self.jobs))
-		lb = max(avg, longest)
+	def __init__(self, core, *args):
+		self.core = core
+		self.ID = args[0]
+		self.user = args[1]
+		self.start = args[2]
+		self.utility = args[3]
+		self.system_proc = args[4]
+		self.end = None
+		self.workload = None
+		self.jobs = []
+
+	def finalize(self, *args):
+		assert self.ID == args[0], 'wrong campaign'
+		assert self.user == args[1], 'wrong user'
+		self.end = args[2]
+		self.workload = args[3]
+		assert len(self.jobs) == args[4], 'missing jobs'
+		self.longest_job = max(map(lambda j: j.run_time, self.jobs))
+		# calculate stretch
+		self.stretch = self._get_stretch()
+
+	def _get_stretch(self):
+		avg = float(self.workload) / self.system_proc
+		lower_bound = max(avg, self.longest_job)
 		return round(float(self.end - self.start)/lb, 2)
-	@property
-	def x_key(self):
-		return "({} {} {})".format(self.user, self.ID, self.runtime)
-	@property
-	def key_desc(self):
-		return "[User, ID, Runtime]"
+
+	#@property
+	#def x_key(self):
+		#return "({} {} {})".format(self.user, self.ID, self.runtime)
+
+	#@property
+	#def key_desc(self):
+		#return "[User, ID, Runtime]"
+
 
 class User(object):
-	def __init__(self, camps, context):
-		self.camps = camps
-		self.ctx = context
-	@property
-	def ID(self):
-		return self.camps[0].user
-	@property
-	def runtime(self):
-		return sum(map(lambda c: c.runtime, self.camps))
-	@property
-	def stretch(self):
-		total = self.runtime
-		weighted = sum(map(lambda c: (c.stretch*c.runtime)/total, self.camps))
-		weighted = sum(map(lambda c: c.stretch, self.camps)) / len(self.camps)
-		return round(weighted, 2)
-	@property
-	def x_key(self):
-		return "({} {} {})".format(self.ID, len(self.camps), self.runtime)
-	@property
-	def key_desc(self):
-		return "[ID, Campaigns, Runtime]"
+	def __init__(self, core, ID):
+		self.core = core
+		self.ID = ID
+		self.jobs = []
+		self.camps = []
+
+	def finalize(self, *args):
+		assert self.ID == args[0], 'wrong user'
+		assert len(self.jobs) == args[1], 'missing jobs'
+		assert len(self.camps) == args[2], 'missing camps'
+		self.lost_virt = args[3]
+		self.false_inact = args[4]
+		# calculate stretch
+		self.stretch = self._get_stretch()
+
+	def _get_stretch(self):
+		total = sum(map(lambda c: c.stretch, self.camps))
+		avg = total / len(self.camps)
+		return round(avg, 2)
+
+	#@property
+	#def x_key(self):
+		#return "({} {} {})".format(self.ID, len(self.camps), self.runtime)
+	#@property
+	#def key_desc(self):
+		#return "[ID, Campaigns, Runtime]"
 
 
 def _get_color(i):
 	c = ['r', 'g', 'b', 'c', 'm', 'y', 'k']
-	c = ['r', '0.0', '0.4']
+	#c = ['r', '0.0', '0.4']
 	return c[i]
-
-def _get_label(i):
-	return ["OStrich", "Fair-share", "FCFS"][i]
 
 def cdf(data, key, **kwargs):
 	""" Stretch CDF """
@@ -460,139 +439,84 @@ def _find_camp(stats, jobs):
 		print "ERROR: Job ID not found:", stats
 		sys.exit(1)
 
-def parse(d, time_filter=0, base=None):
-	from ast import literal_eval
+def parse(filename):
 
-	for line in open(os.path.join(d, "sim.trace")):
-		if line.startswith('{'):
-			context = literal_eval(line)
-			break
-	else:
-		print "ERROR: No context found"
-		sys.exit(1)
+	def to_val(*args):
+		val = []
+		for arg in args:
+			try:
+				v = int(arg)
+			except ValueError:
+				try
+					v = float(arg)
+				except ValueError:
+					v = arg  # not a number
+			val.append(v)
+		return val
 
-	if base:
-		for key, val in base['context'].items():
-			if key not in ["title", "move_jobs", "slurm_config", "user_id"]: # this can be different
-				if context[key] != val and key != "swf_file": # TODO DEL SWF_FILE, ZROBIC ZEBY TEN PARAMETR TYLKO NAZWE PLLIKU MIAL AN IE CALA SCEIZKE!!!!
-					print "ERROR: Different context between simulations"
-					print key, context[key], val #TODO DEL
-					sys.exit(1)
-
-	jobs_log = []
-	for line in open(os.path.join(d, "slurmctld.log")):
-		if "OStrich Log" in line:
-			job_stats = line.split(":")[-1].split()
-			if len(job_stats) > 6:
-				job_stats = map(int, job_stats[:-1])
-			else:
-				job_stats = map(int, job_stats)
-				job_stats.append(1)
-
-			if job_stats[RUNTIME] <= time_filter:	# filter out very short jobs
-				continue
-			job_stats[USER_ID] -= context['user_id']
-
-			# use base to create campaigns in 'fifo-type' simulations
-			if job_stats[CAMP_ID] == -1 and base:
-				job_stats[CAMP_ID] = _find_camp(job_stats, base['jobs'])
-			if job_stats[CAMP_ID] is not None: # TODO DEL
-				jobs_log.append(job_stats)
-
-	first_submit = min(map(lambda j: j[SUBMIT], jobs_log))
-	for job_stats in jobs_log:
-		job_stats[SUBMIT] -= first_submit
-
-	if base:
-		jobs_log = filter(lambda x: x[SUBMIT] < 19500, jobs_log) #TODO DELETE
-
-	jobs = sorted(jobs_log, key=lambda x: x[JOB_ID])
-	jobs = [Job(job_stats, context) for job_stats in jobs]
-
-	campaigns = {}
-	for job in jobs:
-		key = (job.user, job.campID)
-		c = campaigns.pop(key, [])
-		c.append(job)
-		campaigns[key] = c
-
-	campaigns = sorted(campaigns.items(), key=lambda x: x[0])
-	campaigns = [Campaign(job_list, context) for key, job_list in campaigns]
-
+	jobs = []
+	camps = []
 	users = {}
-	for c in campaigns:
-		u = users.pop(c.user, [])
-		u.append(c)
-		users[c.user] = u
+	utility = [(-1, -1)]  # guard at the start
 
-	users = sorted(users.items(), key=lambda x: x[0])
-	users = [User(camp_list, context) for key, camp_list in users]
+	f = open(filename)
+	# check file validity
+	first = f.readline()
+	assert first[0] == '{', 'missing context'
 
-	return {'context': context,
-			'jobs': jobs,
-			'campaigns': campaigns,
-			'users': users}
+	block_camps = {}
+
+	for line in f:
+		tokens = line.split()
+		prefix, entity, rest = tokens[0], tokens[1], to_val(tokens[2:])
+
+		assert prefix in ['CORE', 'MARGIN'], 'invalid prefix'
+		core = (prefix == 'CORE')
+
+		if entity == 'JOB':
+			job = Job(core, rest)
+			users[job.user].jobs.append(job)
+			block_camps[(job.camp, job.user)].jobs.append(job)
+			jobs.append(job)
+		elif entity == 'CAMP':
+			event, rest = rest[0], rest[1:]
+			if event == 'START':
+				c = Campaign(core, rest)
+				u = User(core, c.user)
+				u.camp.append(c)
+				assert u.ID not in users
+				users[u.ID] = u
+				block_camps[(c.ID, c.user)] = c
+			else:
+				assert event == 'END'
+				block_camps[(rest[0], rest[1])].finalize(rest)
+		elif entity == 'USER':
+			users[rest[0]].finalize(rest)
+		elif entity == 'UTILITY':
+			if utility[-1][0] != rest[0]:
+				utility.append((rest[0], rest[1]))
+			else:
+				utility[-1][1] = rest[1]
+		elif entity == 'BLOCK':
+			camps.extend(block_camps.itervalues())
+			block_camps = {}
+		else
+			assert entity in ['DIAG']
+	# add last block
+	camps.extend(block_camps.itervalues())
+	# remove guard
+	assert utility.pop(0) == (-1, -1), 'missing guard'
+	f.close()
+
+	return {'jobs': jobs,
+		'campaigns': camps,
+		'users': users,
+		'utility': utility}
+
 
 def run_draw(args):
 
-	time_filter = 1
 
-	#if args.base_camp is None:
-		#base = None
-	#else:
-		#base = parse(args.base_camp)
-
-	import pickle
-	with open('ttt3', 'rb') as input:
-		a = pickle.load(input)
-
-	#a = []
-	#for i in xrange(1, 36):
-		#f = "done/{}".format(i)
-		#base = parse(f+"tt".format(i))
-		#data = [parse(d, time_filter, base) for d in [f+"tt", f+"ff", f+"pf"]]
-		#a.append(data)
-
-	#a = []
-	#for i in xrange(1, 31):
-
-		#f1 = "pp/{}".format(i)
-		#f2 = "ss/{}".format(i)
-		#try:
-			#base = parse(f1+"tt")
-			#data = [parse(d, time_filter, base) for d in [f1+"tt", f1+"ff", f1+"pf"]]
-			##base = parse(f2+"tt")
-			##data.extend( [parse(d, time_filter, base) for d in [f2+"tt", f2+"ff"]] )
-			#a.append(data)
-		#except:
-			#print f1, f2
-			#continue
-		#print i
-
-	#for i in range(2):
-		#for sss, sim in enumerate(a):
-			#print "sim", sss
-
-			#d = sim[i]
-
-			#cpus = d['context']['cpus']
-
-			#for c in d['campaigns']:
-				#act_jobs = sum(map(lambda j: j.active_cpus(c.start), d['jobs']))
-
-				#ut = act_jobs/float(cpus)
-				#ut = max(ut, 0.01)
-
-				#c.utility = ut
-
-	#import pickle
-	#with open("ttt3", 'wb') as output:
-		#pickle.dump(a, output, pickle.HIGHEST_PROTOCOL)
-
-	print len(a)
-	data = a
-
-	#sys.exit(1)
 	# create selected graphs
 	graphs = [
 		#(cdf, "jobs", {}),
@@ -603,7 +527,7 @@ def run_draw(args):
 		#(std, "runtime", {'f': _runtime_func}),
 		#(std, "user", {'f': lambda j: j.user}),
 		#(area, "user", {'base': base}),
-		(diff_heat, "campaigns", {}),
+		#(diff_heat, "campaigns", {}),
 	]
 
 	out = "."
@@ -635,9 +559,6 @@ def run_draw(args):
 
 if __name__=="__main__":
 
-	parser = argparse.ArgumentParser(description="Draw graphs from logs")
-	parser.add_argument('dirs', nargs='+',
-						help="List of directories, each with log and trace file")
-	parser.add_argument('--base_camp',
-						help="Directory containing job-to-campaign mapping")
+	parser = argparse.ArgumentParser(description='Draw graphs from logs')
+	parser.add_argument('logs', nargs='+', help='List of log files to plot')
 	run_draw(parser.parse_args())
