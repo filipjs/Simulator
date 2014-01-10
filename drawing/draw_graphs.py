@@ -128,6 +128,7 @@ def cdf(simulations, key, **kwargs):
 
 def job_runtime(data, key, **kwargs):
 	""" Stretch CDF """
+	#TODO
 	plt.xlabel('job runtime')
 	plt.ylabel('average stretch')
 
@@ -224,78 +225,6 @@ def average(simulations, key, **kwargs):
 
 		plt.plot(x, y, color=_get_color(i), label=sim)
 	plt.axis([0, len(y), 0, 100])
-
-
-def _runtime_func(job):
-	real = int(job.runtime * job.ctx['time_scale'])
-
-	small = 60 * 10			# 10 mins
-	big = 60 * 60 * 4		# 4h
-	huge = 60 * 60 * 24		# 1 day
-
-	if real >= huge:
-		return (real/huge + 1) * 1440
-	elif real >= big:
-		return (real/big + 1) * 240
-	else:
-		return (real/small + 1) * 10
-
-
-def _math_stats(l):
-	def average(s):
-		return sum(s) * 1.0 / len(s)
-	d = {}
-	d['avg'] = average(l)
- 	d['std_dev'] = math.sqrt(average(map(lambda x: (x - d['avg'])**2, l)))
- 	#print d, l
-	return d
-
-
-def std(data, key, f):
-	"""// Jobs Standard Deviation """
-
-	max_y = 10
-	width = 0.55
-
-	plot_count = len(data)
-	step = int( math.ceil(plot_count * width) )
-
-	bars = []
-
-	for i, d in enumerate(data):
-		points = {}
-		for job in d['jobs']:
-			k = f(job)
-			v = points.pop(k, [])
-			v.append(job.stretch)
-			points[k] = v
-
-		points = sorted(points.items(), key=lambda x: x[0])
-		ele_count = len(points)
-
-		x = np.arange(0, ele_count * step, step)
-		x_desc, y, yerr = [], [], []
-
-		for (k, v) in points:
-			x_desc.append(k)
-			y.append(_math_stats(v)['avg'])
-			yerr.append(_math_stats(v)['std_dev'])
-
-		ax = plt.bar(
-			x + i*width, y,
-			#yerr=yerr,
-			width=width-0.15,
-			color=_get_color(i),
-			ecolor=_get_color(i),
-			label=d['context']['title'],
-			linewidth=0
-		)
-		bars.append(ax)
-
-	plt.xticks(x + width, x_desc)
-	plt.xlabel(key)
-
-	plt.axis([0, ele_count * step + 1, 0, max_y])
 
 
 def utility(simulations, key, **kwargs):
@@ -421,9 +350,7 @@ def run_draw(args):
 		(cdf, "campaigns", {}),
 		#(average, "users", {}),
 		#(job_runtime, "jobs", {}),
-		(utility, "total", {}),
-		#(std, "runtime", {'f': _runtime_func}),
-		#(std, "user", {'f': lambda j: j.user}),
+		#(utility, "total", {}),
 		(diff_heat, "campaigns", {}),
 	]
 
@@ -438,15 +365,6 @@ def run_draw(args):
 
 		fname = '{}_{}.pdf'.format(key.capitalize(), g.__name__)
 		fig.savefig(os.path.join(out, fname), format='pdf')  # save to file
-
-	if 0:
-		done = len(graphs)
-		for i in range(3):
-			fig = plt.figure(done + i, figsize=(11, 7))
-			d = [sim[i] for sim in data]
-			heatmap(d)
-			fname = "Heatmap_" + str(i)
-			fig.savefig(os.path.join(out, fname), format='pdf')
 
 	if 0:
 		for c in data[0]['campaigns']:
