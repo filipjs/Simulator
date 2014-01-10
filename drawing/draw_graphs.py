@@ -65,14 +65,6 @@ class Campaign(object):
 	def __repr__(self):
 		return '{} {} {}'.format(len(self.jobs), self.workload, self.stretch)
 
-	#@property
-	#def x_key(self):
-		#return "({} {} {})".format(self.user, self.ID, self.runtime)
-
-	#@property
-	#def key_desc(self):
-		#return "[User, ID, Runtime]"
-
 
 class User(object):
 	def __init__(self, core, ID):
@@ -97,13 +89,6 @@ class User(object):
 
 	def __repr__(self):
 		return '{} {}'.format(self.camps, self.stretch)
-
-	#@property
-	#def x_key(self):
-		#return "({} {} {})".format(self.ID, len(self.camps), self.runtime)
-	#@property
-	#def key_desc(self):
-		#return "[ID, Campaigns, Runtime]"
 
 
 def _get_color(i):
@@ -181,9 +166,10 @@ def diff_heat(simulations, key, **kwargs):
 	max_y = 10
 
 	v = {}
-	for i in range(11, 20+1): # utility co 0.05
+	for i in range(11, 20+1): # utility incremented by 0.05
 		ut = (i*5) / 100.
-		v[ut] = {j/10.:0 for j in range(1, max_y * 10 + 1)} # stretch <1, max_y> co 0.1
+		# stretch <1, max_y> incremented by 0.1
+		v[ut] = {j/10.:0 for j in range(1, max_y * 10 + 1)}
 
 	for i, (sim, data) in enumerate(simulations.iteritems()):
 
@@ -201,12 +187,12 @@ def diff_heat(simulations, key, **kwargs):
 
 			v[ut][min(max_y, s)] += m
 
-	v = sorted(v.items(), key=lambda x: x[0])		# sort by utility
+	v = sorted(v.items(), key=lambda x: x[0])  # sort by utility
 
 	heat = []
 	for i, j in v:
-		j = sorted(j.items(), key=lambda x: x[0])	# sort by stretch
-		heat.extend(map(lambda x: x[1], j))			# add values
+		j = sorted(j.items(), key=lambda x: x[0])  # sort by stretch
+		heat.extend(map(lambda x: x[1], j))  # add values
 
 	heat = np.array(heat)
 	heat.shape = (10, max_y * 10)
@@ -217,29 +203,12 @@ def diff_heat(simulations, key, **kwargs):
 
 	x_ax = np.arange(0, 11)
 	plt.xticks(x_ax, x_ax/20. + 0.5)
-	plt.xlabel('cluster utility at the time of campaign submission')
+	plt.xlabel('cluster utilization at the time of campaign submission')
 
 	y_ax = np.arange(0, (max_y + 1) * 10, 10)
 	plt.yticks(y_ax, map(str, y_ax/10.)[:-1] + [str(max_y) + " or more"])
 	plt.ylabel('campaign stretch')
 
-
-def _label_values(bars, max_y):
-	for i, bar in enumerate(bars):
-		count = len(bars)
-
-		if i % count == 0:
-			direction = 'right'
-		elif i % count == count - 1:
-			direction = 'left'
-		else:
-			direction = 'center'
-
-		for rect in bar:
-			height = rect.get_height()
-			if height >= max_y:
-				plt.text(rect.get_x(), max_y, '%d'%int(height),
-							va='bottom', ha=direction)
 
 def average(simulations, key, **kwargs):
 	"""// Campaigns Average Stretch """
@@ -271,6 +240,7 @@ def _runtime_func(job):
 	else:
 		return (real/small + 1) * 10
 
+
 def _math_stats(l):
 	def average(s):
 		return sum(s) * 1.0 / len(s)
@@ -279,6 +249,7 @@ def _math_stats(l):
  	d['std_dev'] = math.sqrt(average(map(lambda x: (x - d['avg'])**2, l)))
  	#print d, l
 	return d
+
 
 def std(data, key, f):
 	"""// Jobs Standard Deviation """
@@ -325,17 +296,16 @@ def std(data, key, f):
 	plt.xlabel(key)
 
 	plt.axis([0, ele_count * step + 1, 0, max_y])
-	_label_values(bars, max_y)
 
 
 def utility(simulations, key, **kwargs):
-	""" Utility """
+	""" Utilization """
 
 	max_st = 0
 	min_end = float('inf')
 
 	for i, (sim, data) in enumerate(simulations.iteritems()):
-		sparse = data['utility'][::100]
+		sparse = data['utility'][::500]
 		x, y = zip(*sparse)
 		print len(x)
 
@@ -347,51 +317,6 @@ def utility(simulations, key, **kwargs):
 	plt.xlabel('time')
 	plt.xticks([])
 	plt.axis([max_st, min_end, 0, 1])
-
-
-def heatmap(data):
-	""" Heatmap """
-
-	freq = 10.0
-	max_y = 10
-
-	v = {}
-	for i in range(1, 10+1):
-		v[i/10.0] = {j/freq:0 for j in range(1, max_y * int(freq) + 1)}
-
-	for d in data:
-		cpus = d['context']['cpus']
-		for c in d['campaigns']:
-			act_jobs = sum(map(lambda j: j.active_cpus(c.start), d['jobs']))
-
-			ut = len(act_jobs)/float(cpus)
-			ut = max(ut, 0.01)
-			ut = math.ceil(ut * 10.0) / 10.0
-
-			s = math.ceil(c.stretch * freq) / freq
-
-			v[ut][min(max_y, s)] += 1
-
-	v = sorted(v.items(), key=lambda x: x[0])		# sort by utility
-
-	heat = []
-	for i, j in v:
-		j = sorted(j.items(), key=lambda x: x[0])	# sort by stretch
-		heat.extend(map(lambda x: x[1], j))			# add values
-
-	heat = np.array(heat)
-	heat.shape = (10, max_y * int(freq))
-
-	plt.pcolor(heat.T, label='b', cmap=plt.cm.hot_r, vmax=2200)
-	plt.colorbar()
-
-	x_ax = np.arange(10)
-	plt.xticks(x_ax, x_ax/10.0)
-	plt.xlabel('cluster utility at the time of campaign submission')
-
-	y_ax = np.arange(0, (max_y + 1) * int(freq), int(freq))
-	plt.yticks(y_ax, map(str, y_ax/freq)[:-1] + ["10 or more"])
-	plt.ylabel('campaign stretch')
 
 
 def parse(filename):
@@ -494,12 +419,12 @@ def run_draw(args):
 	graphs = [
 		(cdf, "jobs", {}),
 		(cdf, "campaigns", {}),
-		(average, "users", {}),
+		#(average, "users", {}),
 		#(job_runtime, "jobs", {}),
 		(utility, "total", {}),
 		#(std, "runtime", {'f': _runtime_func}),
 		#(std, "user", {'f': lambda j: j.user}),
-		#(diff_heat, "campaigns", {}),
+		(diff_heat, "campaigns", {}),
 	]
 
 	for i, (g, key, kwargs) in enumerate(graphs):
