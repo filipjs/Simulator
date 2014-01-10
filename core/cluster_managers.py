@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import functools
 import logging
 from abc import ABCMeta, abstractmethod
 from util import delta
