@@ -1,12 +1,8 @@
 # -*- coding: utf-8 -*-
 import functools
+import logging
 from abc import ABCMeta, abstractmethod
-from util import debug_print, delta
-
-
-# set up debug level for this module
-DEBUG_FLAG = False #__debug__
-debug_print = functools.partial(debug_print, DEBUG_FLAG, __name__)
+from util import delta
 
 
 """
@@ -63,15 +59,16 @@ class BaseManager(object):
 		self._max_cpu_per_node = nodes[0]
 		self._cpu_limit = sum(nodes.itervalues())
 		self._reservations = 0#TODO REMOVE????
-	def _dump_space(self, *args):
+	def _dump_space(self, msg, *args):
 		"""
 		Print the current state of node spaces.
 		"""
-		debug_print(*args)
-		it = self._space_list
-		while it is not None:
-			print '{:20}{}'.format(' ', it)
-			it = it.next
+		if logging.getLogger().isEnabledFor(logging.DEBUG):
+			logging.debug(msg, *args)
+			it = self._space_list
+			while it is not None:
+				logging.debug('{:20}{}'.format(' ', it))
+				it = it.next
 
 	def sanity_test(self, job):
 		"""
@@ -215,8 +212,7 @@ class BaseManager(object):
 				break
 			it = it.next
 		# debug info
-		if DEBUG_FLAG:
-			self._dump_space('Added resources', job)
+		self._dump_space('Added resources %s', job)
 		return can_run
 
 	def clear_reservations(self):
@@ -242,8 +238,7 @@ class BaseManager(object):
 				it.reservation_start = False
 				prev, it = it, it.next
 		# debug info
-		if DEBUG_FLAG:
-			self._dump_space('Cleared reservations')
+		self._dump_space('Cleared reservations')
 
 	def job_ended(self, job):
 		"""
@@ -283,8 +278,7 @@ class BaseManager(object):
 		# finally clear
 		del job.res
 		# debug info
-		if DEBUG_FLAG:
-			self._dump_space('Removed resources', job)
+		self._dump_space('Removed resources %s', job)
 
 	@abstractmethod
 	def intersect(self, x, y):
