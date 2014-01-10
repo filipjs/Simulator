@@ -578,10 +578,11 @@ if __name__=="__main__":
 
 	args = vars(parser.parse_args())
 
-	PROFILE_FLAG = args.pop('profile')
-	setup_logging(PROFILE_FLAG and args.pop('debug'))
-
 	if args['command'] == 'run':
+		# setup mode of execution
+		PROFILE_FLAG = args.pop('profile')
+		setup_logging(PROFILE_FLAG and args.pop('debug'))
+		# and go!
 		run(args['workload'], args)
 	elif args['command'] == 'config':
 		config(args)

@@ -618,7 +618,7 @@ class GeneralSimulator(object):
 		"""
 		msg = 'CAMPAIGN START {} {} {} {:.4f} {}'.format(
 			camp.ID, camp.user.ID, camp.created,
-			self._utility, self.cpu_limit)
+			self._utility, self._cpu_limit)
 		self._store_msg(camp.created, msg)
 
 	def _store_camp_ended(self, camp):
@@ -649,7 +649,7 @@ class GeneralSimulator(object):
 		  USER user_id job_count camp_count lost_virtual_time
 		       false_inactivity_period
 		"""
-		msg = 'USER {} {} {} {}'.format(
+		msg = 'USER {} {} {} {} {}'.format(
 			user.ID, len(user.completed_jobs),
 			len(user.completed_camps),
 			user.lost_virtual, user.false_inactivity)

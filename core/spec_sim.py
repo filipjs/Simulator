@@ -44,7 +44,9 @@ class RealSimulator(GeneralSimulator):
 		GeneralSimulator._virt_second_stage(self)
 
 		for u in self._users.itervalues():
-			assert u.active_camps, 'inactive user'
-			inactive = self._camp_end_event(u.active_camps[0])
-			assert inactive, 'active user'
-			assert not u.active_camps, 'active user'
+			assert u.active_camps or not u.completed_jobs, \
+			    'user with jobs is inactive'
+			if u.completed_jobs:
+				inactive = self._camp_end_event(u.active_camps[0])
+				assert inactive, 'still active user'
+				assert not u.active_camps, 'still active user'

@@ -59,7 +59,8 @@ class Campaign(object):
 	def _get_stretch(self):
 		avg = float(self.workload) / self.system_proc
 		lower_bound = max(avg, self.longest_job)
-		return round(float(self.end - self.start)/lb, 2)
+		length = float(self.end - self.start)
+		return round(length / lower_bound, 2)
 
 	#@property
 	#def x_key(self):
@@ -79,8 +80,8 @@ class User(object):
 
 	def finalize(self, *args):
 		assert self.ID == args[0], 'wrong user'
-		assert len(self.jobs) == args[1], 'missing jobs'
-		assert len(self.camps) == args[2], 'missing camps'
+		#assert len(self.jobs) == args[1], 'missing jobs'
+		#assert len(self.camps) == args[2], 'missing camps'
 		self.lost_virt = args[3]
 		self.false_inact = args[4]
 		# calculate stretch
@@ -441,16 +442,16 @@ def _find_camp(stats, jobs):
 
 def parse(filename):
 
-	def to_val(*args):
+	def to_val(line):
 		val = []
-		for arg in args:
+		for word in line:
 			try:
-				v = int(arg)
+				v = int(word)
 			except ValueError:
-				try
-					v = float(arg)
+				try:
+					v = float(word)
 				except ValueError:
-					v = arg  # not a number
+					v = word  # not a number
 			val.append(v)
 		return val
 
@@ -474,33 +475,34 @@ def parse(filename):
 		core = (prefix == 'CORE')
 
 		if entity == 'JOB':
-			job = Job(core, rest)
+			job = Job(core, *rest)
 			users[job.user].jobs.append(job)
 			block_camps[(job.camp, job.user)].jobs.append(job)
 			jobs.append(job)
-		elif entity == 'CAMP':
+		elif entity == 'CAMPAIGN':
 			event, rest = rest[0], rest[1:]
 			if event == 'START':
-				c = Campaign(core, rest)
-				u = User(core, c.user)
-				u.camp.append(c)
-				assert u.ID not in users
+				c = Campaign(core, *rest)
+				u = users.get(c.user, User(core, c.user))
+				u.camps.append(c)
 				users[u.ID] = u
 				block_camps[(c.ID, c.user)] = c
 			else:
 				assert event == 'END'
-				block_camps[(rest[0], rest[1])].finalize(rest)
+				block_camps[(rest[0], rest[1])].finalize(*rest)
 		elif entity == 'USER':
-			users[rest[0]].finalize(rest)
+			if rest[0] in users:
+				users[rest[0]].finalize(*rest)
+			# else -> user without jobs in this block
 		elif entity == 'UTILITY':
 			if utility[-1][0] != rest[0]:
-				utility.append((rest[0], rest[1]))
+				utility.append([rest[0], rest[1]])
 			else:
 				utility[-1][1] = rest[1]
 		elif entity == 'BLOCK':
 			camps.extend(block_camps.itervalues())
 			block_camps = {}
-		else
+		else:
 			assert entity in ['DIAG']
 	# add last block
 	camps.extend(block_camps.itervalues())
@@ -516,6 +518,26 @@ def parse(filename):
 
 def run_draw(args):
 
+	if args.output is not None:
+		# before we start, check the output directory
+		if not os.path.isdir(args.output):
+			raise Exception('invalid output directory %s' % args.output)
+	else:
+		import itertools
+		title = args.logs[0].split('-')[0]
+		for i in itertools.count():
+			suffix = '' if i == 0 else '(%s)' % i
+			out = title + suffix
+			if not os.path.exists(out):
+				os.mkdir(out)
+				args.output = out
+				break
+
+	data = {}
+
+	for filename in args.logs:
+		sched = filename.split('-')[1]
+		data[sched] = parse(filename)
 
 	# create selected graphs
 	graphs = [
@@ -561,4 +583,6 @@ if __name__=="__main__":
 
 	parser = argparse.ArgumentParser(description='Draw graphs from logs')
 	parser.add_argument('logs', nargs='+', help='List of log files to plot')
+	parser.add_argument('--output', help='Directory to store the plots in')
+
 	run_draw(parser.parse_args())
