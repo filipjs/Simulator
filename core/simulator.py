@@ -2,16 +2,11 @@
 import functools
 import heapq
 import itertools
+import logging
 import math
 import time
 import cluster_managers
-from util import debug_print, delta
-
-
-# set up debug level for this module
-DEBUG_FLAG = True
-DEBUG_FLAG = False
-debug_print = functools.partial(debug_print, DEBUG_FLAG, __name__)
+from util import delta
 
 
 class Events(object):
@@ -138,6 +133,7 @@ class GeneralSimulator(object):
 		self._stats.total_usage = 0
 		# diagnostic statistics
 		self._diag = Container()
+		self._diag.skipped = []
 		self._diag.forced = 0
 		self._diag.sched_pass = self._diag.sched_jobs = 0
 		self._diag.bf_pass = self._diag.bf_jobs = 0
@@ -207,7 +203,7 @@ class GeneralSimulator(object):
 			self._now, event, entity = self._pq.pop()
 
 			if event != Events.force_decay:
-				debug_print('Time', delta(self._now), 'event', event)
+				logging.debug('Time %s, event %s', delta(self._now), event)
 
 			# Process the time skipped between events
 			# before changing the state of the system.
@@ -227,7 +223,7 @@ class GeneralSimulator(object):
 					self._new_job_event(entity)
 					schedule = True
 				else:
-					#print 'WARNING: job', job.ID, 'can never run'
+					self._diag.skipped.append(entity.ID)
 					end_iter += 1
 				sub_count -= 1
 			elif event == Events.job_end:
@@ -480,7 +476,7 @@ class GeneralSimulator(object):
 
 				self._execute(job)
 				started += 1
-				debug_print('Bf_mode', bf_mode, 'started', job)
+				logging.debug('BF_mode %s started %s', bf_mode, job)
 			elif not bf_mode:
 				break
 
@@ -559,7 +555,7 @@ class GeneralSimulator(object):
 			# In the `_update_camp_estimates` we aren't removing
 			# the old `campaign_end` events from the queue,
 			# so it is possible that this event is out of order.
-			debug_print('Skipping campaign_end event', camp)
+			logging.debug('Skipping campaign_end event %s', camp)
 			return
 
 		while user.active_camps and not user.active_camps[0].time_left:
@@ -664,3 +660,6 @@ class GeneralSimulator(object):
 		msg = 'DIAG {sched_pass} {sched_jobs:.4f} {bf_pass} {bf_jobs:.4f}' \
 		      ' {avg_util:.4f} {sim_time:.2f} {forced}'
 		self._results.append('CORE ' + msg.format(**self._diag.__dict__))
+
+	def __str__(self):
+		return self.__class__.__name__

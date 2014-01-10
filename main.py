@@ -4,6 +4,7 @@ import argparse
 import functools
 import glob
 import importlib
+import logging
 import multiprocessing
 import os
 import sys
@@ -12,7 +13,6 @@ from core import parsers, simulator, spec_sim
 from parts import settings
 
 
-PROFILE_FLAG = True
 PROFILE_FLAG = False
 
 
@@ -77,8 +77,7 @@ def divide_jobs(jobs, first_job, block_time, block_margin):
 			if j.ID == first_job:
 				break
 		else:
-			print 'ERROR: job ID', first_job, 'not found'
-			sys.exit(1)
+			raise Exception('job ID %s not found' % first_job)
 	else:
 		i = 0
 
@@ -152,8 +151,7 @@ def cpu_percentile(block, percentile):
 		if elements >= find:
 			return cpus
 	else:
-		print 'ERROR: Invalid percentile:', percentile
-		sys.exit(1)
+		raise Exception('invalid percentile %s' % percentile)
 
 
 def make_classes(name, conf, modules=[]):
@@ -181,22 +179,30 @@ def make_classes(name, conf, modules=[]):
 			cl = getattr(m, name)
 			return cl(conf)  # create instance
 	else:
-		raise Exception('class not found: ' + name)
+		raise Exception('class not found %s' % name)
 
 
 def print_stats(diag):
 	"""
 	Print the diagnostic statistics from a simulation.
 	"""
+
+	for jid in diag.skipped:
+		logging.log(15, 'Job %s cannot run' % jid)
+	if diag.skipped:
+		logging.warn("Skipped %s jobs that couldn't run" % len(diag.skipped))
+
 	# change some stats to percentages
 	diag.bf_jobs *= 100
 	diag.avg_util *= 100
 
-	diag_msg = """\
-     Backfilled jobs {bf_jobs:.2f}%, average utilization {avg_util:.2f}%
-     Backfill loops {bf_pass}, sched loops {sched_pass}
-     Simulation time {sim_time:.2f} decay events {forced}"""
-	print diag_msg.format(**diag.__dict__)
+	line0 = '    Backfilled jobs {bf_jobs:.2f}%, average utilization {avg_util:.2f}%'
+	line1 = '    Backfill loops {bf_pass}, sched loops {sched_pass}'
+	line2 = '    Simulation time {sim_time:.2f}s, decay events {forced}'
+
+	logging.info(line0.format(**vars(diag)))
+	logging.info(line0.format(**vars(diag)))
+	logging.info(line0.format(**vars(diag)))
 
 
 def simulate_block(block, nodes, sched, alg_conf, part_conf):
@@ -227,13 +233,15 @@ def simulate_block(block, nodes, sched, alg_conf, part_conf):
 	part_conf.scheduler = sched
 	params = (block, users, nodes, alg_conf, part_conf)
 
-	assert not (sched.only_virtual and sched.only_real), 'invalid sched settings'
+	assert not (sched.only_virtual and sched.only_real), 'invalid scheduler'
 	if sched.only_virtual:
 		my_sim = spec_sim.VirtualSimulator(*params)
 	elif sched.only_real:
 		my_sim = spec_sim.RealSimulator(*params)
 	else:
 		my_sim = simulator.GeneralSimulator(*params)
+
+	logging.log(15, '{} using {}'.format(sched, my_sim))
 
 	if not PROFILE_FLAG:
 		return my_sim.run()
@@ -242,6 +250,27 @@ def simulate_block(block, nodes, sched, alg_conf, part_conf):
 		cProfile.runctx('print my_sim.run()[1].__dict__',
 				globals(), locals(),
 				sort='cumulative')
+
+
+def setup_logging(debug):
+	"""
+	Set the root logger.
+	"""
+	if debug:
+		lvl = logging.DEBUG
+	else:
+		lvl = 15
+	fmt = '%(levelname)s: %(message)s'
+	logging.basicConfig(
+		filename='last_sim.log',
+		filemode='w',
+		format=fmt,
+		level=lvl
+	)
+	ch = logging.StreamHandler()
+	ch.setLevel(logging.INFO)
+	ch.setFormatter(logging.Formatter(fmt))
+	logging.getLogger().addHandler(ch)
 
 
 def run(workload, args):
@@ -258,8 +287,7 @@ def run(workload, args):
 
 	# before we start, check the output directory
 	if not os.path.isdir(sim_conf.output):
-		print 'ERROR: invalid output directory', sim_conf.output
-		sys.exit(1)
+		raise Exception('invalid output directory %s' % sim_conf.output)
 
 	# now we need to load and instantiate the classes from `part_conf`
 	for key, value in part_conf.__dict__.items():
@@ -303,12 +331,12 @@ def run(workload, args):
 	block_msg = 'Block {:2} (first id {}): {} scheduler, {} jobs' \
 		    ' (inc. {} margin jobs), {} CPUs'
 	if not sim_conf.cpu_count:
-		block_msg += ' ({}-th percentile)'.format(sim_conf.cpu_percent)
+		block_msg += ' (%s-th percentile)' % sim_conf.cpu_percent
 
 	global_start = time.time()
 
 	print '-' * 50
-	print 'Simulation STARTED. Block count', len(blocks)
+	logging.info('Simulation started. Block count %s' % len(blocks))
 
 	# start with blocks with highest job count
 	for bl in sorted(blocks, key=lambda x: len(x), reverse=True):
@@ -366,10 +394,10 @@ def run(workload, args):
 			f.writelines( '%s\n' % line for line in r )
 
 		f.close()
-		print 'Saving results COMPLETED. File', filename
+		logging.info('Results saved to file %s' % filename)
 
-	print 'Simulation COMPLETED. Total run time',
-	print round(time.time() - global_start, 2)
+	logging.info('Simulation completed. Total run time %.2f'
+		     % (time.time() - global_start))
 	print '-' * 50
 
 
@@ -393,8 +421,7 @@ def config(args):
 			if line[0] == '{':
 				values = literal_eval(line)
 			else:
-				print 'ERROR: no context in file:', args['recreate']
-				sys.exit(1)
+				raise Exception('no context in file %s' % args['recreate'])
 
 	def str_value(value):
 		"""
@@ -526,6 +553,10 @@ if __name__=="__main__":
 					   usage='%(prog)s {}'.format(run_opts),
 					   fromfile_prefix_chars='@',
 					   formatter_class=MyHelpFormatter)
+	run_parser.add_argument('--profile', action='store_true',
+				help='Run a time profiler instead of the normal simulation')
+	run_parser.add_argument('--debug', action='store_true',
+				help='Set the logger level to DEBUG')
 	run_parser.add_argument('workload', help='The workload file')
 
 	sim_group = run_parser.add_argument_group('General simulation parameters')
@@ -547,6 +578,9 @@ if __name__=="__main__":
 				  help='Recreate the configuration from a simulation')
 
 	args = vars(parser.parse_args())
+
+	PROFILE_FLAG = args.pop('profile')
+	setup_logging(PROFILE_FLAG and args.pop('debug'))
 
 	if args['command'] == 'run':
 		run(args['workload'], args)

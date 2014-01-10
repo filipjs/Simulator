@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import logging
 import os
 import sys
 from abc import ABCMeta, abstractmethod
@@ -18,9 +19,9 @@ def get_parser(filename):
 	elif ext == '.icm':
 		p = ICMParser()
 	else:
-		print 'WARNING: No parser found for the extension', ext
+		logging.warn('No parser found for the extension %s' % ext)
 		p = DefaultParser()
-	print 'Using the', p.__class__.__name__
+	logging.info('Using the %s' % p)
 	return p
 
 
@@ -71,9 +72,9 @@ class BaseParser(object):
 		f.close()
 
 		if skipped:
-			print 'WARNING: skipped', skipped, 'empty job records'
-		print 'Parsing COMPLETED. Retrieved', len(self.jobs), 'job records',
-		print 'and', len(self.users), 'user records.'
+			logging.warn('Skipped %s incomplete job records' % skipped)
+		logging.info('Parsing completed. Retrieved {} job records and {}'
+			     ' user records.'.format(len(self.jobs), len(self.users)))
 		return self.jobs, self.users
 
 	def _next_job(self, stats):
@@ -126,7 +127,7 @@ class BaseParser(object):
 			ids.add(stats['job_id'])
 
 		if err is not None:
-			msg = 'Job {}: {}'.format(stats.get('job_id'), err)
+			msg = 'job {}: {}'.format(stats.get('job_id'), err)
 			raise InvalidStatsError(msg)
 
 		for name in self.OPTIONAL:
@@ -139,6 +140,9 @@ class BaseParser(object):
 		Return if this line should be parsed.
 		"""
 		raise NotImplemented
+
+	def __str__(self):
+		return self.__class__.__name__
 
 
 class DefaultParser(BaseParser):
