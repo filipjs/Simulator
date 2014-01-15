@@ -230,22 +230,53 @@ def average(simulations, key, **kwargs):
 def utility(simulations, key, **kwargs):
 	""" Utilization """
 
-	max_st = 0
-	min_end = float('inf')
+	def timeline(ut, first, last):
+		#TODO ZROBIC TO SZYBCIEJ NIZ LINIOWO, DAC PERIOD I SKAKAC PO `PERIOD` na raz
+		c = first
+		true_end = min(last, ut[-1][0])
+		i, val = 0, 0
+		while c < true_end:
+			if c < ut[i][0]:
+				yield val
+				c += 1
+			else:
+				assert ut[i][0] < ut[i+1][0], 'utility duplicate'
+				val = ut[i][1]
+				i += 1
+		while c < last:
+			yield 0
+			c += 1
+
+	st = float('inf')
+	end = 0
+	period = 60 * 60 * 24
+
+	for data in simulations.itervalues():
+		ut = data['utility']
+		st = min(st, ut[0][0])
+		end = max(end, ut[-1][0])
 
 	for i, (sim, data) in enumerate(simulations.iteritems()):
-		sparse = data['utility'][::500]
-		x, y = zip(*sparse)
-		print len(x)
+		ut = data['utility']
+		print 'przed', len(ut)
 
-		max_st = max(max_st, x[0])
-		min_end = min(min_end, x[-1])
+		y = []
+		avg = 0.0
 
+		for t, val in enumerate(timeline(ut, st, end)):
+			if t % period == 0:
+				y.append(avg / period)
+				avg = 0.0
+			avg += val
+
+		x = range(len(y))
+		print 'po', len(y)
 		plt.plot(x, y, color=_get_color(i), label=sim)
 
 	plt.xlabel('time')
 	plt.xticks([])
-	plt.axis([max_st, min_end, 0, 1])
+	#plt.axis([st, end, 0, 1])
+	plt.axis([0, len(y), 0, 1])
 
 
 def parse(filename):
@@ -303,6 +334,7 @@ def parse(filename):
 				users[rest[0]].finalize(*rest)
 			# else -> user without jobs in this block
 		elif entity == 'UTILITY':
+			assert utility[-1][0] <= rest[0], 'utility not sorted'
 			if utility[-1][0] != rest[0]:
 				utility.append([rest[0], rest[1]])
 			else:
@@ -342,23 +374,25 @@ def run_draw(args):
 	for filename in args.logs:
 		sim = '{0[0]} {0[1]}'.format(
 			os.path.basename(filename).split('-'))
+		#TODO to moze dac taka sama nazwe
+		#sim = filename
 		simulations[sim] = parse(filename)
 
 	# create selected graphs
 	graphs = [
-		(cdf, "jobs", {}),
-		(cdf, "campaigns", {}),
+		#(cdf, "jobs", {}),
+		#(cdf, "campaigns", {}),
 		#(average, "users", {}),
 		#(job_runtime, "jobs", {}),
-		#(utility, "total", {}),
-		(diff_heat, "campaigns", {}),
+		(utility, "total", {}),
+		#(diff_heat, "campaigns", {}),
 	]
 
 	for i, (g, key, kwargs) in enumerate(graphs):
 		fig = plt.figure(i, figsize=(10, 7))  # size is in inches
 
 		g(simulations, key, **kwargs)  # add plots
-		plt.legend(loc=2)  # add legend
+		plt.legend(loc=4)  # add legend
 
 		title = '{} {}'.format(key.capitalize(), g.__doc__)
 		plt.title(title, y=1.05, fontsize=20)  # add title
