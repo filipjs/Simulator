@@ -140,7 +140,7 @@ class GeneralSimulator(object):
 		self._diag.avg_util = 0
 		self._diag.sim_time = time.time()
 
-		self._results = ['CORE BLOCK']  # mark a new block start
+		self._results = []
 		self._pq = PriorityQueue()
 		# initialize the scheduler
 		self._parts.scheduler.set_stats(self._stats)
@@ -218,7 +218,9 @@ class GeneralSimulator(object):
 
 			if event == Events.new_job:
 				# check if the job is runnable
-				if self._manager.sanity_test(entity):
+				too_big = entity.proc > 16000
+				if (self._manager.sanity_test(entity) and
+				    not too_big):
 					self._new_job_event(entity)
 					schedule = True
 				else:
@@ -302,6 +304,7 @@ class GeneralSimulator(object):
 				self._store_camp_ended(c)
 			self._store_user_stats(u)
 		self._store_diag_stats()
+		self._results.append('CORE BLOCK END')  # mark block end
 
 		return self._results, self._diag
 
@@ -585,7 +588,11 @@ class GeneralSimulator(object):
 		core_st, core_end = self._core_period
 		prev, ut = self._diag.prev_util
 
-		if self._now >= core_st and prev < core_end:
+		if prev <= core_st < self._now:
+			# add the utility from the starting point of the core
+			self._store_utility(core_st, ut)
+
+		if core_st < self._now and prev < core_end:
 			prev = max(prev, core_st)
 			now = min(self._now, core_end)
 			self._diag.avg_util += (now - prev) * ut

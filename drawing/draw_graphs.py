@@ -9,8 +9,7 @@ import sys
 
 
 class Job(object):
-	def __init__(self, core, *args):
-		self.core = core
+	def __init__(self, *args):
 		self.ID = args[0]
 		self.camp = args[1]
 		self.user = args[2]
@@ -35,8 +34,7 @@ class Job(object):
 
 
 class Campaign(object):
-	def __init__(self, core, *args):
-		self.core = core
+	def __init__(self, *args):
 		self.ID = args[0]
 		self.user = args[1]
 		self.start = args[2]
@@ -67,16 +65,13 @@ class Campaign(object):
 
 
 class User(object):
-	def __init__(self, core, ID):
-		self.core = core
+	def __init__(self, ID):
 		self.ID = ID
 		self.jobs = []
 		self.camps = []
 
 	def finalize(self, *args):
 		assert self.ID == args[0], 'wrong user'
-		#assert len(self.jobs) == args[1], 'missing jobs'
-		#assert len(self.camps) == args[2], 'missing camps'
 		self.lost_virt = args[3]
 		self.false_inact = args[4]
 		# calculate stretch
@@ -161,7 +156,7 @@ def diff_heat(simulations, key, **kwargs):
 	""" Heatmap """
 
 	if len(simulations) != 2:
-		print 'Difference heatmap only from two plots'
+		print 'Heatmap difference only from two plots'
 		return
 
 	max_y = 10
@@ -230,8 +225,11 @@ def average(simulations, key, **kwargs):
 def utility(simulations, key, **kwargs):
 	""" Utilization """
 
+	if len(simulations) < 2:
+		print 'Utility difference only from maximum two plots'
+		return
+
 	def timeline(ut, first, last):
-		#TODO ZROBIC TO SZYBCIEJ NIZ LINIOWO, DAC PERIOD I SKAKAC PO `PERIOD` na raz
 		c = first
 		true_end = min(last, ut[-1][0])
 		i, val = 0, 0
@@ -249,34 +247,45 @@ def utility(simulations, key, **kwargs):
 
 	st = float('inf')
 	end = 0
-	period = 60 * 60 * 24
 
 	for data in simulations.itervalues():
 		ut = data['utility']
 		st = min(st, ut[0][0])
 		end = max(end, ut[-1][0])
 
+	period = int(math.ceil( (end - st) / 100.0 ))
+
+	plots = []
+
 	for i, (sim, data) in enumerate(simulations.iteritems()):
 		ut = data['utility']
-		print 'przed', len(ut)
-
 		y = []
 		avg = 0.0
 
 		for t, val in enumerate(timeline(ut, st, end)):
-			if t % period == 0:
+			if t and t % period == 0:
 				y.append(avg / period)
 				avg = 0.0
 			avg += val
+		# add last point
+		y.append(avg / period)
+		plots.append(y)
 
-		x = range(len(y))
-		print 'po', len(y)
-		plt.plot(x, y, color=_get_color(i), label=sim)
+	if len(plots) == 1:
+		plt.ylabel('utilization')
+		y = plots[0]
+		plt.axis([0, len(y), 0, 1])
+	else:
+		plt.ylabel('difference in utilization')
+		y = map(lambda a,b: a - b, plots[0], plots[1])
+		plt.axis([0, len(y), -0.5, 0.5])
+		plt.axhline(color='k', ls='--')
+
+	x = range(len(y))
+	plt.plot(x, y, 'r-')
 
 	plt.xlabel('time')
 	plt.xticks([])
-	#plt.axis([st, end, 0, 1])
-	plt.axis([0, len(y), 0, 1])
 
 
 def parse(filename):
@@ -314,38 +323,46 @@ def parse(filename):
 		core = (prefix == 'CORE')
 
 		if entity == 'JOB':
-			job = Job(core, *rest)
-			users[job.user].jobs.append(job)
+			job = Job(*rest)
 			block_camps[(job.camp, job.user)].jobs.append(job)
-			jobs.append(job)
+			if core:
+				users[job.user].jobs.append(job)
+				jobs.append(job)
+
 		elif entity == 'CAMPAIGN':
+			if not core:
+				continue
 			event, rest = rest[0], rest[1:]
 			if event == 'START':
 				c = Campaign(core, *rest)
-				u = users.get(c.user, User(core, c.user))
+				u = users.get(c.user, User(c.user))
 				u.camps.append(c)
 				users[u.ID] = u
 				block_camps[(c.ID, c.user)] = c
 			else:
 				assert event == 'END'
 				block_camps[(rest[0], rest[1])].finalize(*rest)
+
 		elif entity == 'USER':
 			if rest[0] in users:
 				users[rest[0]].finalize(*rest)
-			# else -> user without jobs in this block
+			# else -> user without core jobs in this block
+
 		elif entity == 'UTILITY':
 			assert utility[-1][0] <= rest[0], 'utility not sorted'
 			if utility[-1][0] != rest[0]:
 				utility.append([rest[0], rest[1]])
 			else:
 				utility[-1][1] = rest[1]
+
 		elif entity == 'BLOCK':
+			assert rest[0] == 'END'
 			camps.extend(block_camps.itervalues())
 			block_camps = {}
+
 		else:
 			assert entity in ['DIAG']
-	# add last block
-	camps.extend(block_camps.itervalues())
+
 	# remove guard
 	assert utility.pop(0) == (-1, -1), 'missing guard'
 	f.close()
@@ -380,16 +397,16 @@ def run_draw(args):
 
 	# create selected graphs
 	graphs = [
-		#(cdf, "jobs", {}),
-		#(cdf, "campaigns", {}),
-		#(average, "users", {}),
+		(cdf, "jobs", {}),
+		(cdf, "campaigns", {}),
+		(average, "users", {}),
 		#(job_runtime, "jobs", {}),
-		(utility, "total", {}),
+		#(utility, "total", {}),
 		#(diff_heat, "campaigns", {}),
 	]
 
 	for i, (g, key, kwargs) in enumerate(graphs):
-		fig = plt.figure(i, figsize=(10, 7))  # size is in inches
+		fig = plt.figure(i, figsize=(16, 9))  # size is in inches
 
 		g(simulations, key, **kwargs)  # add plots
 		plt.legend(loc=4)  # add legend
