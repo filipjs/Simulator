@@ -44,6 +44,7 @@ class Block(object):
 		self._jobs = jobs[inx['left']:inx['right']+1]
 		self.core_count = inx['last'] - inx['first'] + 1
 		self.margin_count = len(self._jobs) - self.core_count
+		self.first_core = jobs[inx['first']].ID
 		self.core_start = jobs[inx['first']].submit
 		self.core_end = self.core_start + block_time
 		self.number = num
@@ -206,10 +207,8 @@ def print_stats(diag):
 	Print the diagnostic statistics from a simulation.
 	"""
 
-	for jid in diag.skipped:
-		logging.log(15, 'Job %s cannot run' % jid)
 	if diag.skipped:
-		logging.warn("Skipped %s jobs that couldn't run" % len(diag.skipped))
+		logging.warn("Skipped %s jobs that couldn't run" % diag.skipped)
 
 	# change some stats to percentages
 	diag.bf_jobs *= 100
@@ -262,7 +261,22 @@ def simulate_block(block, nodes, sched, alg_conf, part_conf):
 
 	logging.log(15, '{} using {}'.format(sched, my_sim))
 
+	from guppy import hpy
+	h = hpy()
+	print 'BEFORE', block.number, sched, h.heap()
+	print "BLOCK LEN", len(block)
+
 	if not PROFILE_FLAG:
+		r = my_sim.run()
+		for j in block:
+			j.reset()
+		for u in users.itervalues():
+			u.reset()
+		#from guppy import hpy
+		h = hpy()
+		print 'AFTER', block.number, sched, h.heap()
+		print 'RESULTS', len(r[0])
+		return r
 		return my_sim.run()
 	else:
 		import cProfile
@@ -298,6 +312,11 @@ def run(workload, args):
 
 	Run one simulation for each supplied ``scheduler``.
 	"""
+
+	if not PROFILE_FLAG:
+		# Prepare the worker pool. Leave one CPU free,
+		# so the operating system can stay responsive.
+		my_pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1)
 
 	# encapsulate different settings
 	sim_conf = settings.Settings(settings.sim_templates, **args)
@@ -339,15 +358,10 @@ def run(workload, args):
 	if sim_conf.one_block:
 		blocks = blocks[:1]
 
-	if not PROFILE_FLAG:
-		# Prepare the worker pool. Leave one CPU free,
-		# so the operating system can stay responsive.
-		my_pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1)
+	async_results = {sched: [None] * len(blocks)
+			 for sched in part_conf.schedulers}
 
-		async_results = {sched: [None] * len(blocks)
-				 for sched in part_conf.schedulers}
-
-	block_msg = 'Block {:2} (first id {}): {} scheduler, {} jobs' \
+	block_msg = 'Block {:2} (first core id {}): {} scheduler, {} jobs' \
 		    ' (inc. {} margin jobs), {} CPUs'
 	if not sim_conf.cpu_count:
 		block_msg += ' (%s-th percentile)' % sim_conf.cpu_percent
@@ -357,8 +371,7 @@ def run(workload, args):
 	print '-' * 50
 	logging.info('Simulation started. Block count %s' % len(blocks))
 
-	# start with blocks with highest job count
-	for bl in sorted(blocks, key=lambda x: len(x), reverse=True):
+	for bl in blocks:
 		# calculate the CPU number
 		if sim_conf.cpu_count:
 			cpus = sim_conf.cpu_count
@@ -376,7 +389,7 @@ def run(workload, args):
 			nodes = {0: cpus}
 
 		for sched in part_conf.schedulers:
-			msg = block_msg.format(bl.number, bl[0].ID, sched,
+			msg = block_msg.format(bl.number, bl.first_core, sched,
 					       len(bl), bl.margin_count, cpus)
 			params = (bl, nodes, sched, alg_conf, part_conf)
 
@@ -418,6 +431,9 @@ def run(workload, args):
 	logging.info('Simulation completed. Total run time %.2f'
 		     % (time.time() - global_start))
 	print '-' * 50
+
+	my_pool.close()
+	my_pool.join()
 
 
 ##

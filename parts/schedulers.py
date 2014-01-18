@@ -99,6 +99,7 @@ class OStrich(BaseScheduler):
 		return (end, camp.created, camp.ID, user.ID,
 			job.estimate, job.submit, job.ID)
 
+
 class Fairshare(BaseScheduler):
 	"""
 	SLURM implementation of the fairshare algorithm.

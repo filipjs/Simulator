@@ -27,12 +27,11 @@ class Job(object):
 	  4) execution ended
 	"""
 
+	__slots__ = ('ID', 'proc', 'nodes', 'pn_cpus', 'submit', 'run_time', 'user',
+		     'time_limit', 'camp', '_start', '_completed', 'estimate', 'alloc')
+
 	def __init__(self, stats, user):
-		"""
-		Required entries in stats:
-		  id, proc, submit, run_time
-		"""
-		self._orig = stats
+		#self._orig = stats #TODO ZROBIC ZEBY MNIEJ RAMU ZAJMOWALO
 		self.ID = stats['job_id']
 		self.proc = stats['proc']
 		self.nodes = stats['nodes']
@@ -47,6 +46,7 @@ class Job(object):
 		self._start = None
 		self._completed = False
 		self.estimate = None
+		self.alloc = None
 
 	def validate_configuration(self):
 		"""
@@ -130,6 +130,10 @@ class Campaign(object):
 	  completed_jobs: jobs that finished execution, ordered by end time.
 
 	"""
+
+	__slots__ = ('ID', 'user', 'created', 'workload', '_virtual', '_offset',
+		     'active_jobs', 'completed_jobs')
+
 	def __init__(self, id, user, time):
 		self.ID = id
 		self.user = user

@@ -62,11 +62,20 @@ class BaseParser(object):
 			if stats['run_time'] <= 0 or stats['proc'] <= 0:
 				skipped += 1
 				continue  # skip incomplete data
+			#if stats['run_time'] < 10 or stats['proc'] > 16000:
+				#skipped += 1
+				#continue  # skip incomplete data
+
 			if serial:
 				count = stats['proc']
 				stats['proc'] = 1
 			else:
+				#max_proc = min(stats['proc'], 32)
+				#count = stats['proc'] / max_proc
+				#assert count > 0
+				#stats['proc'] = max_proc
 				count = 1
+
 			for i in range(count):
 				self._next_job(stats)
 		f.close()

@@ -324,17 +324,18 @@ def parse(filename):
 
 		if entity == 'JOB':
 			job = Job(*rest)
-			block_camps[(job.camp, job.user)].jobs.append(job)
 			if core:
-				users[job.user].jobs.append(job)
 				jobs.append(job)
+			if (job.camp, job.user) in block_camps:
+				block_camps[(job.camp, job.user)].jobs.append(job)
+				users[job.user].jobs.append(job)
 
 		elif entity == 'CAMPAIGN':
 			if not core:
 				continue
 			event, rest = rest[0], rest[1:]
 			if event == 'START':
-				c = Campaign(core, *rest)
+				c = Campaign(*rest)
 				u = users.get(c.user, User(c.user))
 				u.camps.append(c)
 				users[u.ID] = u
@@ -366,6 +367,16 @@ def parse(filename):
 	# remove guard
 	assert utility.pop(0) == (-1, -1), 'missing guard'
 	f.close()
+
+	#for u in sorted(users.itervalues(), key=lambda x: x.ID):
+		#print u.ID, u.stretch
+		#for c in u.camps:
+			#print '\t',
+			#print c.ID, c.start, c.end, c.utility, c.workload, c.longest_job, c.stretch
+			#print '\t\tavg jobs', len(c.jobs),
+			#if len(c.jobs) == 1:
+				#print c.jobs[0].ID,
+			#print sum(map(lambda x: x.stretch, c.jobs)) / len(c.jobs)
 
 	return {'jobs': jobs,
 		'campaigns': camps,
@@ -401,8 +412,8 @@ def run_draw(args):
 		(cdf, "campaigns", {}),
 		(average, "users", {}),
 		#(job_runtime, "jobs", {}),
-		#(utility, "total", {}),
-		#(diff_heat, "campaigns", {}),
+		(utility, "total", {}),
+		(diff_heat, "campaigns", {}),
 	]
 
 	for i, (g, key, kwargs) in enumerate(graphs):

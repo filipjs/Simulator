@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import collections
 import heapq
 import itertools
 import logging
@@ -91,6 +92,9 @@ class Container(object):
 	pass
 
 
+Utility = collections.namedtuple('Utility', ['time', 'value'])
+
+
 class GeneralSimulator(object):
 	"""
 	Defines the flow of the simulation.
@@ -132,17 +136,17 @@ class GeneralSimulator(object):
 		self._stats.total_usage = 0
 		# diagnostic statistics
 		self._diag = Container()
-		self._diag.skipped = []
+		self._diag.skipped = 0
 		self._diag.forced = 0
 		self._diag.sched_pass = self._diag.sched_jobs = 0
 		self._diag.bf_pass = self._diag.bf_jobs = 0
-		self._diag.prev_util = None  # a pair <time, utility>
 		self._diag.avg_util = 0
 		self._diag.sim_time = time.time()
 
-		self._results = []
+		self._results = ['BLOCK START %s' % self._cpu_limit]
+		self._core_util = []
 		self._pq = PriorityQueue()
-		# initialize the scheduler
+		# link the scheduler to the simulation
 		self._parts.scheduler.set_stats(self._stats)
 
 	def _finalize(self):
@@ -150,13 +154,26 @@ class GeneralSimulator(object):
 		Final step after the simulation has ended.
 		"""
 		# finalize diagnostic stats
-		true_end = min(self._diag.prev_util[0], self._core_period[1])
-		self._diag.avg_util /= (true_end - self._core_period[0])
-		del self._diag.prev_util
-		self._diag.sim_time = time.time() - self._diag.sim_time
+		assert self._core_util > 1, 'no jobs from core period'
+		diff_util, core_util = [], self._core_util
+
+		for i in xrange(1, len(core_util)):
+			period = core_util[i].time - core_util[i-1].time
+			value = core_util[i-1].value
+			self._diag.avg_util += period * value
+			# compress periods with same values
+			if diff_util and diff_util[-1].value == value:
+				period += diff_util.pop().time
+			diff_util.append(Utility(period, value))
+
+		full_period = core_util[-1].time - core_util[0].time
+		self._diag.avg_util /= full_period
+		self._core_util = diff_util  # swap the lists
+		# change absolute values to percentages
 		self._diag.sched_jobs /= float(len(self._future_jobs))
 		self._diag.bf_jobs /= float(len(self._future_jobs))
-		# clear the scheduler
+		self._diag.sim_time = time.time() - self._diag.sim_time
+		# clear the link to the scheduler
 		self._parts.scheduler.clear_stats()
 
 	def run(self):
@@ -185,7 +202,6 @@ class GeneralSimulator(object):
 
 		# the first job submission is the simulation 'time zero'
 		prev_event = self._future_jobs[0].submit
-		self._diag.prev_util = (prev_event, 0)
 
 		while sub_iter < sub_total or not self._pq.empty():
 			# We only need to keep two `new_job` events in the
@@ -218,13 +234,11 @@ class GeneralSimulator(object):
 
 			if event == Events.new_job:
 				# check if the job is runnable
-				too_big = entity.proc > 16000
-				if (self._manager.sanity_test(entity) and
-				    not too_big):
+				if self._manager.sanity_test(entity):
 					self._new_job_event(entity)
 					schedule = True
 				else:
-					self._diag.skipped.append(entity.ID)
+					self._diag.skipped += 1
 					end_iter += 1
 				sub_count -= 1
 			elif event == Events.job_end:
@@ -267,7 +281,7 @@ class GeneralSimulator(object):
 				scheduled_jobs = self._schedule(bf_mode=False)
 				self._diag.sched_jobs += scheduled_jobs
 				self._diag.sched_pass += 1
-				self._update_util() # after schedule
+				self._update_util()  # must be after schedule
 				schedule = False
 				if instant_bf: backfill = True
 
@@ -275,7 +289,7 @@ class GeneralSimulator(object):
 				backfilled_jobs = self._schedule(bf_mode=True)
 				self._diag.bf_jobs += backfilled_jobs
 				self._diag.bf_pass += 1
-				self._update_util()  # after schedule
+				self._update_util()  # must be after schedule
 				backfill = False
 
 			if campaigns:
@@ -303,8 +317,10 @@ class GeneralSimulator(object):
 			for i, c in enumerate(u.completed_camps):
 				self._store_camp_ended(c)
 			self._store_user_stats(u)
+		self._store_utility()
+		self._core_util = None
 		self._store_diag_stats()
-		self._results.append('CORE BLOCK END')  # mark block end
+		self._results.append('BLOCK END')  # mark block end
 
 		return self._results, self._diag
 
@@ -586,18 +602,20 @@ class GeneralSimulator(object):
 		Keep track of the system average utility.
 		"""
 		core_st, core_end = self._core_period
-		prev, ut = self._diag.prev_util
 
-		if prev <= core_st < self._now:
-			# add the utility from the starting point of the core
-			self._store_utility(core_st, ut)
+		# If we aren't in the core period, then this will
+		# override one of the core period ends:
+		# 1) core start - this will eventually update the
+		#    starting utility to the correct value
+		# 2) core end - only the time value is used from
+		#    the last point, the utility value doesn't matter
+		now = max(self._now, core_st)
+		now = min(now, core_end)
 
-		if core_st < self._now and prev < core_end:
-			prev = max(prev, core_st)
-			now = min(self._now, core_end)
-			self._diag.avg_util += (now - prev) * ut
-			self._store_utility(now, self._utility)  # add results
-		self._diag.prev_util = (self._now, self._utility)
+		if (self._core_util and
+		    self._core_util[-1].time == now):
+			self._core_util.pop()
+		self._core_util.append(Utility(now, self._utility))
 
 	def _store_msg(self, event_time, event_msg):
 		"""
@@ -610,31 +628,25 @@ class GeneralSimulator(object):
 			prefix = 'MARGIN '
 		self._results.append(prefix + event_msg)
 
-	def _store_utility(self, time, val):
-		"""
-		Event message:
-		  UTILITY time value
-		"""
-		msg = 'UTILITY {} {:.4f}'.format(time, val)
-		self._results.append('CORE ' + msg)
-
 	def _store_camp_created(self, camp):
 		"""
 		Event message:
-		  CAMPAIGN START camp_id user_id time utility cpu_limit
+		  CAMPAIGN START camp_id user_id time utility
 		"""
-		msg = 'CAMPAIGN START {} {} {} {:.4f} {}'.format(
+		msg = 'CAMPAIGN START {} {} {} {:.4f}'.format(
 			camp.ID, camp.user.ID, camp.created,
-			self._utility, self._cpu_limit)
+			self._utility)
 		self._store_msg(camp.created, msg)
 
 	def _store_camp_ended(self, camp):
 		"""
 		Event message:
-		  CAMPAIGN END camp_id user_id real_end_time workload job_count
+		  CAMPAIGN END camp_id user_id real_end_time workload
+		               job_count
 		"""
+		real_end = camp.completed_jobs[-1].end_time
 		msg = 'CAMPAIGN END {} {} {} {} {}'.format(
-			camp.ID, camp.user.ID, camp.completed_jobs[-1].end_time,
+			camp.ID, camp.user.ID, real_end,
 			camp.workload, len(camp.completed_jobs))
 		self._store_msg(camp.created, msg)
 
@@ -660,7 +672,18 @@ class GeneralSimulator(object):
 			user.ID, len(user.completed_jobs),
 			len(user.completed_camps),
 			user.lost_virtual, user.false_inactivity)
-		self._results.append('CORE ' + msg)
+		self._results.append(msg)
+
+	def _store_utility(self):
+		"""
+		Event message:
+		  UTILITY time_period value
+		"""
+		msg = 'UTILITY {} {:.4f}'
+		for ut in self._core_util:
+			self._results.append(
+				msg.format(ut.time, ut.value)
+			)
 
 	def _store_diag_stats(self):
 		"""
@@ -670,7 +693,7 @@ class GeneralSimulator(object):
 		"""
 		msg = 'DIAG {sched_pass} {sched_jobs:.4f} {bf_pass} {bf_jobs:.4f}' \
 		      ' {avg_util:.4f} {sim_time:.2f} {forced}'
-		self._results.append('CORE ' + msg.format(**self._diag.__dict__))
+		self._results.append(msg.format(**self._diag.__dict__))
 
 	def __str__(self):
 		return self.__class__.__name__

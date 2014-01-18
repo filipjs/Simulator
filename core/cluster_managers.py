@@ -195,7 +195,7 @@ class BaseManager(object):
 		# get the resources from the `avail` node map
 		res = self._assign_resources(avail, job, not can_run)
 		if can_run:
-			job.res = res
+			job.alloc = res
 			last.job_last_space += 1
 		else:
 			self._reservations += 1
@@ -247,14 +247,14 @@ class BaseManager(object):
 		self._space_list.length = self._space_list.end - job.end_time
 		#self._space_list.update()
 		assert self._space_list.length >= 0, 'some finished jobs not removed'
-		assert hasattr(job, 'res'), 'missing job resources'
+		assert job.alloc is not None, 'missing job resources'
 
 		last_space_end = job.start_time + job.time_limit
 		it = self._space_list
 
 		while it.end < last_space_end:
 			assert not self.size(it.reserved), 'reservations not removed'
-			it.avail = self.add(it.avail, job.res)
+			it.avail = self.add(it.avail, job.alloc)
 			it = it.next
 
 		assert it.end == last_space_end, 'missing job last space'
@@ -272,10 +272,10 @@ class BaseManager(object):
 			# move 'pointers' as the last step
 			it.next = it.next.next
 		else:
-			it.avail = self.add(it.avail, job.res)
+			it.avail = self.add(it.avail, job.alloc)
 			it.job_last_space -= 1
 		# finally clear
-		del job.res
+		job.alloc = None
 		# debug info
 		self._dump_space('Removed resources %s', job)
 
