@@ -9,6 +9,7 @@ import multiprocessing
 import os
 import sys
 import time
+import zlib
 from core import parsers, simulator, spec_sim
 from parts import settings
 
@@ -261,10 +262,10 @@ def simulate_block(block, nodes, sched, alg_conf, part_conf):
 
 	logging.log(15, '{} using {}'.format(sched, my_sim))
 
-	from guppy import hpy
-	h = hpy()
-	print 'BEFORE', block.number, sched, h.heap()
-	print "BLOCK LEN", len(block)
+	#from guppy import hpy
+	#h = hpy()
+	#print 'BEFORE', block.number, sched, h.heap()
+	#print "BLOCK LEN", len(block)
 
 	if not PROFILE_FLAG:
 		r = my_sim.run()
@@ -273,9 +274,9 @@ def simulate_block(block, nodes, sched, alg_conf, part_conf):
 		for u in users.itervalues():
 			u.reset()
 		#from guppy import hpy
-		h = hpy()
-		print 'AFTER', block.number, sched, h.heap()
-		print 'RESULTS', len(r[0])
+		#h = hpy()
+		#print 'AFTER', block.number, sched, h.heap()
+		#print 'RESULTS', len(r[0])
 		return r
 		return my_sim.run()
 	else:
@@ -422,7 +423,9 @@ def run(workload, args):
 			r, diag = async_r.get(timeout=60*60*24*365)
 			print_stats(diag)
 			# save partial results to file
-			f.writelines( '%s\n' % line for line in r )
+			print "RESULTS", len(r)
+			f.write(r)
+			f.write('\n')
 
 		f.close()
 

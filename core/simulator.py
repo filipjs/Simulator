@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-import collections
 import heapq
 import itertools
 import logging
 import math
 import time
+import zlib
 import cluster_managers
 from util import delta
 
@@ -92,8 +92,7 @@ class Container(object):
 	pass
 
 
-Utility = collections.namedtuple('Utility', ['time', 'value'])
-
+from memory_profiler import profile
 
 class GeneralSimulator(object):
 	"""
@@ -144,35 +143,19 @@ class GeneralSimulator(object):
 		self._diag.sim_time = time.time()
 
 		self._results = ['BLOCK START %s' % self._cpu_limit]
-		self._core_util = []
 		self._pq = PriorityQueue()
 		# link the scheduler to the simulation
 		self._parts.scheduler.set_stats(self._stats)
 
+	@profile
 	def _finalize(self):
 		"""
 		Final step after the simulation has ended.
 		"""
 		# finalize diagnostic stats
-		assert self._core_util > 1, 'no jobs from core period'
-		diff_util, core_util = [], self._core_util
-
-		for i in xrange(1, len(core_util)):
-			period = core_util[i].time - core_util[i-1].time
-			value = core_util[i-1].value
-			self._diag.avg_util += period * value
-			# compress periods with same values
-			if diff_util and diff_util[-1].value == value:
-				period += diff_util.pop().time
-			diff_util.append(Utility(period, value))
-
-		full_period = core_util[-1].time - core_util[0].time
-		self._diag.avg_util /= full_period
-		self._core_util = diff_util  # swap the lists
-		# change absolute values to percentages
+		self._diag.sim_time = time.time() - self._diag.sim_time
 		self._diag.sched_jobs /= float(len(self._future_jobs))
 		self._diag.bf_jobs /= float(len(self._future_jobs))
-		self._diag.sim_time = time.time() - self._diag.sim_time
 		# clear the link to the scheduler
 		self._parts.scheduler.clear_stats()
 
@@ -317,13 +300,12 @@ class GeneralSimulator(object):
 			for i, c in enumerate(u.completed_camps):
 				self._store_camp_ended(c)
 			self._store_user_stats(u)
-		self._store_utility()
-		self._core_util = None
+		#self._store_utility()
 		self._store_diag_stats()
 		self._results.append('BLOCK END')  # mark block end
-
+		self._results = '\n'.join(self._results)
+		self._results = zlib.compress(self._results)
 		return self._results, self._diag
-
 
 	def _virt_first_stage(self, period):
 		"""
@@ -597,7 +579,7 @@ class GeneralSimulator(object):
 			# shares still the same
 			return False
 
-	def _update_util(self):
+	def _update_util(self, last_util={}, avg={'period':0, 'sum':0.0}):
 		"""
 		Keep track of the system average utility.
 		"""
@@ -612,10 +594,18 @@ class GeneralSimulator(object):
 		now = max(self._now, core_st)
 		now = min(now, core_end)
 
-		if (self._core_util and
-		    self._core_util[-1].time == now):
-			self._core_util.pop()
-		self._core_util.append(Utility(now, self._utility))
+		if last_util:
+			period = now - last_util['time']
+			assert period >= 0, 'invalid period'
+			if period:
+				# update the current average
+				avg['period'] += period
+				avg['sum'] += period * last_util['value']
+				self._diag.avg_util = avg['sum'] / avg['period']
+				# add the results
+				self._store_utility(period, last_util['value'])
+		last_util['time'] = now
+		last_util['value'] = self._utility
 
 	def _store_msg(self, event_time, event_msg):
 		"""
@@ -674,16 +664,21 @@ class GeneralSimulator(object):
 			user.lost_virtual, user.false_inactivity)
 		self._results.append(msg)
 
-	def _store_utility(self):
+	def _store_utility(self, period, value):
 		"""
 		Event message:
 		  UTILITY time_period value
 		"""
 		msg = 'UTILITY {} {:.4f}'
+		self._results.append(msg.format(period, value))
+		return
+		import zlib
+		cc = zlib.compressobj()
 		for ut in self._core_util:
 			self._results.append(
-				msg.format(ut.time, ut.value)
+				cc.compress(msg.format(ut.time, ut.value))
 			)
+		cc.flush()
 
 	def _store_diag_stats(self):
 		"""
