@@ -185,7 +185,7 @@ class GeneralSimulator(object):
 
 		# the first job submission is the simulation 'time zero'
 		prev_event = self._future_jobs[0].submit
-		assert prev_event == 0, 'invalid time zero'
+		assert not prev_event, 'invalid time zero'
 
 		while sub_iter < sub_total or not self._pq.empty():
 			# We only need to keep two `new_job` events in the
@@ -452,18 +452,14 @@ class GeneralSimulator(object):
 		)
 
 		if bf_mode:
-			self._manager.prepare_backfill(self._now)
 			try_func = self._manager.try_backfill
-
 			assert self._settings.bf_depth, 'invalid bf_depth'
 			work = min(len(self._waiting_jobs), self._settings.bf_depth)
 		else:
-			#TODO FIXME
-			#try_func = self._manager.try_schedule
-			self._manager.prepare_backfill(self._now)
-			try_func = self._manager.try_backfill
-
+			try_func = self._manager.try_schedule
 			work = len(self._waiting_jobs)
+
+		self._manager.start_session(self._now)
 
 		# last job has the highest priority
 		prio_iter = len(self._waiting_jobs) - 1
@@ -484,7 +480,8 @@ class GeneralSimulator(object):
 
 			prio_iter -= 1
 			work -= 1
-		self._manager.clear_reservations() #TODO REMOVE
+
+		self._manager.end_session()
 		return started
 
 	def _new_job_event(self, job):
