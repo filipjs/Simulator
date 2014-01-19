@@ -43,12 +43,16 @@ class Block(object):
 
 		"""
 		self._jobs = jobs[inx['left']:inx['right']+1]
+		self._first_core = jobs[inx['first']]
+
 		self.core_count = inx['last'] - inx['first'] + 1
 		self.margin_count = len(self._jobs) - self.core_count
-		self.first_core = jobs[inx['first']].ID
-		self.core_start = jobs[inx['first']].submit
+
+		self.core_start = self._first_core.submit
 		self.core_end = self.core_start + block_time
+
 		self.number = num
+		self.cpus = self.nodes = None
 
 	def __len__(self):
 		return len(self._jobs)
@@ -58,6 +62,12 @@ class Block(object):
 
 	def __iter__(self):
 		return iter(self._jobs)
+
+	def __repr__(self):
+		s = 'Block {:2} (core id {}): {} jobs' \
+		    ' (inc. {} margin jobs), {} CPUs'
+		return s.format(self.number, self._first_core.ID,
+			len(self), self.margin_count, self.cpus)
 
 
 def divide_jobs(jobs, first_job, block_time, block_margin):
@@ -223,23 +233,29 @@ def print_stats(diag):
 	logging.info(line1.format(**vars(diag)))
 	logging.info(line2.format(**vars(diag)))
 
+from memory_profiler import profile
 
-def simulate_block(block, nodes, sched, alg_conf, part_conf):
+def simulate_block(block, sched, alg_conf, part_conf):
 	"""
 	Do a simulation on the specified block.
 
 	Args:
-	  block: `Block` with `Jobs`.
-	  nodes: the cluster node configuration.
+	  block: `Block` with `Jobs` and cluster node configuration.
 	  sched: selected scheduler from part_conf.schedulers.
 	  alg_conf: algorithmic settings.
 	  part_conf: parts instances.
 
 	Return:
-	  a list with event strings.
+	  a string with all the events.
 	  diagnostic statistics from the run.
 
 	"""
+	assert block.cpus and block.nodes, 'invalid block configuration'
+	assert block.cpus == sum(block.nodes.itervalues()), 'invalid nodes'
+
+	@profile
+	def abla(x):
+		print x
 
 	# extract the users and reset all instances
 	users = {}
@@ -250,7 +266,7 @@ def simulate_block(block, nodes, sched, alg_conf, part_conf):
 		u.reset()
 
 	part_conf.scheduler = sched
-	params = (block, users, nodes, alg_conf, part_conf)
+	params = (block, users, alg_conf, part_conf)
 
 	assert not (sched.only_virtual and sched.only_real), 'invalid scheduler'
 	if sched.only_virtual:
@@ -259,7 +275,7 @@ def simulate_block(block, nodes, sched, alg_conf, part_conf):
 		my_sim = spec_sim.RealSimulator(*params)
 	else:
 		my_sim = simulator.GeneralSimulator(*params)
-
+	abla(1)
 	logging.log(15, '{} using {}'.format(sched, my_sim))
 
 	#from guppy import hpy
@@ -269,6 +285,7 @@ def simulate_block(block, nodes, sched, alg_conf, part_conf):
 
 	if not PROFILE_FLAG:
 		r = my_sim.run()
+		abla(2)
 		for j in block:
 			j.reset()
 		for u in users.itervalues():
@@ -359,14 +376,7 @@ def run(workload, args):
 	if sim_conf.one_block:
 		blocks = blocks[:1]
 
-	async_results = {sched: [None] * len(blocks)
-			 for sched in part_conf.schedulers}
-
-	block_msg = 'Block {:2} (first core id {}): {} scheduler, {} jobs' \
-		    ' (inc. {} margin jobs), {} CPUs'
-	if not sim_conf.cpu_count:
-		block_msg += ' (%s-th percentile)' % sim_conf.cpu_percent
-
+	async_results = {sched: [] for sched in part_conf.schedulers}
 	global_start = time.time()
 
 	print '-' * 50
@@ -389,16 +399,17 @@ def run(workload, args):
 		else:
 			nodes = {0: cpus}
 
+		bl.cpus = cpus
+		bl.nodes = nodes
+
 		for sched in part_conf.schedulers:
-			msg = block_msg.format(bl.number, bl.first_core, sched,
-					       len(bl), bl.margin_count, cpus)
-			params = (bl, nodes, sched, alg_conf, part_conf)
+			params = (bl, sched, alg_conf, part_conf)
 
 			if not PROFILE_FLAG:
 				async_r = my_pool.apply_async(simulate_block, params)
-				async_results[sched][bl.number] = (async_r, msg)
+				async_results[sched].append(async_r)
 			else:
-				print msg
+				print bl, sched
 				simulate_block(*params)
 
 	if PROFILE_FLAG:
@@ -415,18 +426,23 @@ def run(workload, args):
 		filename = os.path.join(sim_conf.output, filename)
 
 		f = open(filename, 'w')
-		f.write(str(args) + '\n')  # full parameters
+		f.write('%s\n' % args)  # original arguments
+		f.write('SIMULATION START %s\n' % time.ctime(global_start))
 
-		for async_r, msg in sim_results:
-			logging.info(msg)
+		for i, async_r in enumerate(sim_results):
+			# display simulation progress
+			if sim_conf.cpu_count:
+				m = '{0} : {1}'
+			else:
+				m = '{0} ({2}-th percentile) : {1}'
+			logging.info(m.format(blocks[i], sched, sim_conf.cpu_percent))
 			# ctr-c doesn't seem to work without timeout
 			r, diag = async_r.get(timeout=60*60*24*365)
 			print_stats(diag)
 			# save partial results to file
-			print "RESULTS", len(r)
-			f.write(r)
-			f.write('\n')
-
+			f.write('BLOCK START %s\n' % blocks[i].cpus)
+			f.write(zlib.decompress(r))
+			f.write('BLOCK END %s\n' % diag)
 		f.close()
 
 		logging.info('Results saved to file %s' % filename)

@@ -92,8 +92,6 @@ class Container(object):
 	pass
 
 
-from memory_profiler import profile
-
 class GeneralSimulator(object):
 	"""
 	Defines the flow of the simulation.
@@ -101,7 +99,7 @@ class GeneralSimulator(object):
 	virtual campaigns and effective CPU usage.
 	"""
 
-	def __init__(self, block, users, nodes, settings, parts):
+	def __init__(self, block, users, settings, parts):
 		"""
 		Args:
 		  block: a `Block` instance with the submitted `Jobs`.
@@ -110,19 +108,21 @@ class GeneralSimulator(object):
 		  settings: algorithmic settings
 		  parts: *instances* of all the system parts
 		"""
-		assert block and users and nodes, 'invalid arguments'
+		assert block and users, 'invalid arguments'
 		self._future_jobs = block
 		self._waiting_jobs = []
 		self._users = users
 		self._settings = settings
 		self._parts = parts
 		self._core_period = (block.core_start, block.core_end)
-		self._cpu_limit = sum(nodes.itervalues())
+		self._cpu_limit = block.cpus
 		# create an appropriate cluster manager
-		if len(nodes) == 1:
-			self._manager = cluster_managers.SingletonManager(nodes, settings)
+		if len(block.nodes) == 1:
+			self._manager = cluster_managers.SingletonManager(
+						block.nodes, settings)
 		else:
-			self._manager = cluster_managers.SlurmManager(nodes, settings)
+			self._manager = cluster_managers.SlurmManager(
+						block.nodes, settings)
 
 	def _initialize(self):
 		"""
@@ -142,12 +142,12 @@ class GeneralSimulator(object):
 		self._diag.avg_util = 0
 		self._diag.sim_time = time.time()
 
-		self._results = ['BLOCK START %s' % self._cpu_limit]
+		self._results = []
 		self._pq = PriorityQueue()
+		self._compressor = zlib.compressobj()
 		# link the scheduler to the simulation
 		self._parts.scheduler.set_stats(self._stats)
 
-	@profile
 	def _finalize(self):
 		"""
 		Final step after the simulation has ended.
@@ -290,7 +290,6 @@ class GeneralSimulator(object):
 				assert not self._pq.empty(), 'infinite loop'
 				self._next_force_decay()
 
-		# do the final step
 		self._finalize()
 		# Results for each user should be in this order:
 		#  1) job ends
@@ -300,11 +299,10 @@ class GeneralSimulator(object):
 			for i, c in enumerate(u.completed_camps):
 				self._store_camp_ended(c)
 			self._store_user_stats(u)
-		#self._store_utility()
-		self._store_diag_stats()
-		self._results.append('BLOCK END')  # mark block end
-		self._results = '\n'.join(self._results)
-		self._results = zlib.compress(self._results)
+
+		# merge the results
+		self._results.append(self._compressor.flush())
+		self._results = ''.join(self._results)
 		return self._results, self._diag
 
 	def _virt_first_stage(self, period):
@@ -479,7 +477,7 @@ class GeneralSimulator(object):
 
 				self._execute(job)
 				started += 1
-				logging.debug('BF_mode %s started %s', bf_mode, job)
+				logging.debug('bf %s started %s', bf_mode, job)
 			elif not bf_mode:
 				break
 
@@ -562,7 +560,7 @@ class GeneralSimulator(object):
 			return
 
 		while user.active_camps and not user.active_camps[0].time_left:
-			# remove all of the campaigns that end now in one go
+			# remove in one go all of the campaigns that end now
 			ended = user.active_camps.pop(0)
 			user.completed_camps.append(ended)
 
@@ -607,26 +605,27 @@ class GeneralSimulator(object):
 		last_util['time'] = now
 		last_util['value'] = self._utility
 
-	def _store_msg(self, event_time, event_msg):
+	def _store_prefix(self, event_time, event_msg):
 		"""
-		Add the event string to the results.
+		Add the event string to the results with
+		a prefix based on the event time.
 		"""
 		if (event_time < self._core_period[1] and
 		    event_time >= self._core_period[0]):
 			prefix = 'CORE '
 		else:
 			prefix = 'MARGIN '
-		self._results.append(prefix + event_msg)
+		self._save(prefix + event_msg)
 
 	def _store_camp_created(self, camp):
 		"""
 		Event message:
-		  CAMPAIGN START camp_id user_id time utility
+		  CAMPAIGN START camp_id user_id creation_time utility
 		"""
-		msg = 'CAMPAIGN START {} {} {} {:.4f}'.format(
+		msg = 'CAMPAIGN START {} {} {} {:.4f}\n'.format(
 			camp.ID, camp.user.ID, camp.created,
 			self._utility)
-		self._store_msg(camp.created, msg)
+		self._store_prefix(camp.created, msg)
 
 	def _store_camp_ended(self, camp):
 		"""
@@ -635,10 +634,10 @@ class GeneralSimulator(object):
 		               job_count
 		"""
 		real_end = camp.completed_jobs[-1].end_time
-		msg = 'CAMPAIGN END {} {} {} {} {}'.format(
+		msg = 'CAMPAIGN END {} {} {} {} {}\n'.format(
 			camp.ID, camp.user.ID, real_end,
 			camp.workload, len(camp.completed_jobs))
-		self._store_msg(camp.created, msg)
+		self._store_prefix(camp.created, msg)
 
 	def _store_job_ended(self, job):
 		"""
@@ -646,11 +645,11 @@ class GeneralSimulator(object):
 		  JOB job_id camp_id user_id submit start end
 		      final_estimate time_limit processor_count
 		"""
-		msg = 'JOB {} {} {} {} {} {} {} {} {}'.format(
+		msg = 'JOB {} {} {} {} {} {} {} {} {}\n'.format(
 			job.ID, job.camp.ID, job.user.ID,
 			job.submit, job.start_time, job.end_time,
 			job.estimate, job.time_limit, job.proc)
-		self._store_msg(job.submit, msg)
+		self._store_prefix(job.submit, msg)
 
 	def _store_user_stats(self, user):
 		"""
@@ -658,37 +657,25 @@ class GeneralSimulator(object):
 		  USER user_id job_count camp_count lost_virtual_time
 		       false_inactivity_period
 		"""
-		msg = 'USER {} {} {} {} {}'.format(
+		msg = 'USER {} {} {} {} {}\n'.format(
 			user.ID, len(user.completed_jobs),
 			len(user.completed_camps),
 			user.lost_virtual, user.false_inactivity)
-		self._results.append(msg)
+		self._save(msg)
 
 	def _store_utility(self, period, value):
 		"""
 		Event message:
 		  UTILITY time_period value
 		"""
-		msg = 'UTILITY {} {:.4f}'
-		self._results.append(msg.format(period, value))
-		return
-		import zlib
-		cc = zlib.compressobj()
-		for ut in self._core_util:
-			self._results.append(
-				cc.compress(msg.format(ut.time, ut.value))
-			)
-		cc.flush()
+		msg = 'UTILITY {} {:.4f}\n'.format(period, value)
+		self._save(msg)
 
-	def _store_diag_stats(self):
+	def _save(self, msg):
 		"""
-		Event message:
-		  DIAG sched_iterations sched_jobs bf_iterations bf_jobs
-		       average_core_utility simulation_time forced_events
+		Compress the message before adding it to the results.
 		"""
-		msg = 'DIAG {sched_pass} {sched_jobs:.4f} {bf_pass} {bf_jobs:.4f}' \
-		      ' {avg_util:.4f} {sim_time:.2f} {forced}'
-		self._results.append(msg.format(**self._diag.__dict__))
+		self._results.append(self._compressor.compress(msg))
 
 	def __str__(self):
 		return self.__class__.__name__

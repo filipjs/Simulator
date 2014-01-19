@@ -8,6 +8,7 @@ from util import delta
 #TODO OPIS
 """
 
+#TODO DODAC FLAGE Z DEBUG == logging.ISENABLEDFOR !!
 
 class _NodeSpace(object):
 	"""
