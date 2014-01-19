@@ -185,6 +185,7 @@ class GeneralSimulator(object):
 
 		# the first job submission is the simulation 'time zero'
 		prev_event = self._future_jobs[0].submit
+		assert prev_event == 0, 'invalid time zero'
 
 		while sub_iter < sub_total or not self._pq.empty():
 			# We only need to keep two `new_job` events in the
@@ -384,7 +385,7 @@ class GeneralSimulator(object):
 		self._pq.add(
 			int(next),  # must be int
 			Events.bf_run,
-			'Bf event'
+			'Backfill event'
 		)
 
 	def _next_force_decay(self):
@@ -394,7 +395,7 @@ class GeneralSimulator(object):
 		self._pq.add(
 			self._now + self._force_period,
 			Events.force_decay,
-			'Force event'
+			'Decay event'
 		)
 
 	@property
@@ -614,15 +615,15 @@ class GeneralSimulator(object):
 		    event_time >= self._core_period[0]):
 			prefix = 'CORE '
 		else:
-			prefix = 'MARGIN '
+			prefix = 'MARG '
 		self._save(prefix + event_msg)
 
 	def _store_camp_created(self, camp):
 		"""
 		Event message:
-		  CAMPAIGN START camp_id user_id creation_time utility
+		  CAMP START camp_id user_id creation_time utility
 		"""
-		msg = 'CAMPAIGN START {} {} {} {:.4f}\n'.format(
+		msg = 'CAMP START {} {} {} {:.4f}\n'.format(
 			camp.ID, camp.user.ID, camp.created,
 			self._utility)
 		self._store_prefix(camp.created, msg)
@@ -630,11 +631,11 @@ class GeneralSimulator(object):
 	def _store_camp_ended(self, camp):
 		"""
 		Event message:
-		  CAMPAIGN END camp_id user_id real_end_time workload
+		  CAMP END camp_id user_id real_end_time workload
 		               job_count
 		"""
 		real_end = camp.completed_jobs[-1].end_time
-		msg = 'CAMPAIGN END {} {} {} {} {}\n'.format(
+		msg = 'CAMP END {} {} {} {} {}\n'.format(
 			camp.ID, camp.user.ID, real_end,
 			camp.workload, len(camp.completed_jobs))
 		self._store_prefix(camp.created, msg)
@@ -666,9 +667,9 @@ class GeneralSimulator(object):
 	def _store_utility(self, period, value):
 		"""
 		Event message:
-		  UTILITY time_period value
+		  UTIL time_period value
 		"""
-		msg = 'UTILITY {} {:.4f}\n'.format(period, value)
+		msg = 'UTIL {} {:.4f}\n'.format(period, value)
 		self._save(msg)
 
 	def _save(self, msg):

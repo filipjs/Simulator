@@ -44,15 +44,21 @@ class Block(object):
 		"""
 		self._jobs = jobs[inx['left']:inx['right']+1]
 		self._first_core = jobs[inx['first']]
+		self._block_time = block_time
 
 		self.core_count = inx['last'] - inx['first'] + 1
 		self.margin_count = len(self._jobs) - self.core_count
 
-		self.core_start = self._first_core.submit
-		self.core_end = self.core_start + block_time
-
 		self.number = num
 		self.cpus = self.nodes = None
+
+	@property
+	def core_start(self):
+		return self._first_core.submit
+
+	@property
+	def core_end(self):
+		return self._first_core.submit + self._block_time
 
 	def __len__(self):
 		return len(self._jobs)
@@ -168,6 +174,7 @@ def cpu_percentile(block, percentile):
 
 def threshold_percentile(jobs):
 	"""
+	TODO jak/kiedy to uruchamiac??
 	"""
 	last_sub = {}
 	values = []
@@ -257,9 +264,14 @@ def simulate_block(block, sched, alg_conf, part_conf):
 	def abla(x):
 		print x
 
+	abla(0)
+
 	# extract the users and reset all instances
 	users = {}
+	time_zero = block[0].submit
+	print "TIME ZERO", time_zero
 	for j in block:
+		j.submit -= time_zero
 		j.reset()
 		users[j.user.ID] = j.user
 	for u in users.itervalues():
@@ -295,7 +307,6 @@ def simulate_block(block, sched, alg_conf, part_conf):
 		#print 'AFTER', block.number, sched, h.heap()
 		#print 'RESULTS', len(r[0])
 		return r
-		return my_sim.run()
 	else:
 		import cProfile
 		cProfile.runctx('print my_sim.run()[1].__dict__',
@@ -442,7 +453,7 @@ def run(workload, args):
 			# save partial results to file
 			f.write('BLOCK START %s\n' % blocks[i].cpus)
 			f.write(zlib.decompress(r))
-			f.write('BLOCK END %s\n' % diag)
+			f.write('BLOCK END %s\n' % diag.__dict__)
 		f.close()
 
 		logging.info('Results saved to file %s' % filename)
