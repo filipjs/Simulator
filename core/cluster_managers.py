@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import bisect
 import logging
 from abc import ABCMeta, abstractmethod
 from util import delta
@@ -48,9 +49,9 @@ class BaseManager(object):
 		# reservation count, max is equal to `settings.bf_depth`
 		self._rsrv_count = 0
 		# reservations ordered by begin time
-		self._rsrv_begin = [None] * settings.bf_depth
+		self._rsrv_begin = []
 		# reservations ordered by end time
-		self._rsrv_end = [None] * settings.bf_depth
+		self._rsrv_end = []
 		# configuration
 		self._node_count = len(nodes)
 		self._max_cpu_per_node = nodes[0]
@@ -118,8 +119,8 @@ class BaseManager(object):
 		assert self._space_list.length > 0, 'some finished jobs not removed'
 		# drop previous reservations
 		self._rsrv_count = 0
-		self._rsrv_begin = [None] * 300 #TODO DEL
-		self._rsrv_end = [None] * 300 #TODO DEL
+		self._rsrv_begin = []
+		self._rsrv_end = []
 		self._window = now + self._settings.bf_window
 
 	def try_schedule(self, job):
@@ -133,15 +134,12 @@ class BaseManager(object):
 		if not self._check_nodes(first.nodes, job):
 			return False
 
-		total_time = 0
-		it = first
+		last = first
 
 		while True:
-			total_time += it.length
-			if total_time >= job.time_limit:
-				last = it
+			if (last.end - first.begin) >= job.time_limit:
 				break
-			it = it.next
+			last = last.next
 
 		# The job spans the spaces from `first` to `last` (inclusive).
 		# However might we have to split the last one.
@@ -227,11 +225,11 @@ class BaseManager(object):
 					  )
 				self._rsrv_count += 1
 				# add to both list, preserving the order
-				#TODO bisect
+				#TODO bisect.
 				self._rsrv_begin.append(new_res)
-				self._rsrv_begin.sort(key=lambda x: float('inf') if x is None else x.begin)
+				self._rsrv_begin.sort(key=lambda x: x.begin)
 				self._rsrv_end.append(new_res)
-				self._rsrv_end.sort(key=lambda x: float('inf') if x is None else x.end)
+				self._rsrv_end.sort(key=lambda x: x.end)
 				break
 			else:
 				# We need more resources. Check what happens next:
