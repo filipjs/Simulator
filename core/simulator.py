@@ -481,7 +481,6 @@ class GeneralSimulator(object):
 			prio_iter -= 1
 			work -= 1
 
-		self._manager.end_session()
 		return started
 
 	def _new_job_event(self, job):

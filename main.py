@@ -648,7 +648,6 @@ if __name__=="__main__":
 		# setup mode of execution
 		PROFILE_FLAG = args.pop('profile')
 		setup_logging(PROFILE_FLAG and args.pop('debug'))
-		# and go!
 		run(args['workload'], args)
 	elif args['command'] == 'config':
 		config(args)

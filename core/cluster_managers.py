@@ -14,24 +14,19 @@ class _NodeSpace(object):
 
 	"""
 
-	def __init__(self, begin, end, avail, reserved, next, job_ends):
+	def __init__(self, begin, end, nodes, next):
 		self.begin = begin
 		self.end = end
-		self.avail = avail  # node map
-		self.reserved = reserved  # node map
+		self.nodes = nodes  # node map
 		self.next = next
-		self.job_ends = job_ends
-		self.rsrv_starts = 0
 		self.update()
 
 	def update(self):
 		self.length = self.end - self.begin
 
 	def __repr__(self):
-		s = '[{}, {}] last {} first {}\n\tavail {}\n\trsrvd {}'
-		return s.format(delta(self.begin), delta(self.end),
-			self.job_ends, self.rsrv_starts,
-			self.avail, self.reserved)
+		s = '[{}, {}] \n\tnodes {}'
+		return s.format(delta(self.begin), delta(self.end), self.nodes)
 
 
 class BaseManager(object):
@@ -47,11 +42,15 @@ class BaseManager(object):
 					0,
 					float('inf'),
 					self._node_map(nodes),
-					self._node_map(),
 					None,
-					0,
 				   )
-		self._reservations = 0
+		self._space_list.job_ends = 0 #TODO DO KONTRUKTORA??
+		# reservation count, max is equal to `settings.bf_depth`
+		self._rsrv_count = 0
+		# reservations ordered by begin time
+		self._rsrv_begin = [None] * settings.bf_depth
+		# reservations ordered by end time
+		self._rsrv_end = [None] * settings.bf_depth
 		# configuration
 		self._node_count = len(nodes)
 		self._max_cpu_per_node = nodes[0]
@@ -67,6 +66,9 @@ class BaseManager(object):
 		while it is not None:
 			logging.debug('%s', it)
 			it = it.next
+		logging.debug('Reservations')
+		for i in xrange(self._rsrv_count):
+			logging.debug('%s', self._rsrv_begin[i])
 
 	def sanity_test(self, job):
 		"""
@@ -102,7 +104,7 @@ class BaseManager(object):
 		Args:
 		  avail: map of available nodes to use.
 		  job: the job in question.
-		  reservation: is this a reservation flag.
+		  reservation: is this a reservation.
 
 		"""
 		raise NotImplemented
@@ -111,79 +113,24 @@ class BaseManager(object):
 		"""
 		Prepare the manager for the upcoming scheduling or backfilling pass.
 		"""
-		self._window = now + self._settings.bf_window
 		self._space_list.begin = now
 		self._space_list.update()
 		assert self._space_list.length > 0, 'some finished jobs not removed'
-		assert not self._reservations, 'reservations not removed'
-
-	def _allocate_resources(self, job, first, last, avail, reservation):
-		"""
-		Allocate resources to the job and update the space list.
-
-		Args:
-		  job: job in question.
-		  first: starting space for the job.
-		  last: last space for the job.
-		  avail: node map with available nodes for the job.
-		  reservation: is this a reservation flag.
-
-		"""
-		assert self._check_nodes(avail, job), 'invalid avail map'
-		# The job spans the spaces from `first` to `last` (inclusive).
-		# However might we have to split the last one.
-		if (last.end - first.begin) > job.time_limit:
-			# Divide the `last` space appropriately and
-			# create a new space to occupy the hole.
-			new_space = _NodeSpace(
-					first.begin + job.time_limit,
-					last.end,
-					self.copy(last.avail),
-					self.copy(last.reserved),
-					last.next,
-					last.job_ends,
-				    )
-			# new space is following `last`
-			last.end = new_space.begin
-			last.next = new_space
-			last.job_ends = 0
-			last.update()
-
-		# get the resources from the `avail` node map
-		res = self._assign_resources(avail, job, reservation)
-		assert self._check_nodes(res, job), 'invalid resource map'
-
-		if not reservation:
-			job.alloc = res
-			last.job_ends += 1
-		else:
-			self._reservations += 1
-			first.rsrv_starts += 1
-
-		# remove the used up resources
-		it = first
-		while True:
-			it.avail = self.remove(it.avail, res)
-			if reservation:
-				it.reserved = self.add(it.reserved, res)
-			if it == last:
-				break
-			it = it.next
-
-		if self._debug:
-			self._dump_space('Added resources %s', job)
+		# drop previous reservations
+		self._rsrv_count = 0
+		self._rsrv_begin = [None] * 300 #TODO DEL
+		self._rsrv_end = [None] * 300 #TODO DEL
+		self._window = now + self._settings.bf_window
 
 	def try_schedule(self, job):
 		"""
+		Try to schedule the job to be executed immediately.
 		"""
-		assert not self._reservations, 'reservations are present'
-		# In a space list without reservations, spaces are
-		# guaranteed to have more resources available than
-		# the spaces before them.
-		# This means we only have to check the first one
-		# to see if the job can be executed.
+		assert not self._rsrv_count, 'reservations are present'
+		# Without reservations we only have to check the first
+		# space to see if the job can be executed.
 		first = self._space_list
-		if not self._check_nodes(first.avail, job):
+		if not self._check_nodes(first.nodes, job):
 			return False
 
 		total_time = 0
@@ -196,91 +143,116 @@ class BaseManager(object):
 				break
 			it = it.next
 
-		self._allocate_resources(job, first, last, first.avail, False)
+		# The job spans the spaces from `first` to `last` (inclusive).
+		# However might we have to split the last one.
+		if (last.end - first.begin) > job.time_limit:
+			# Divide the `last` space appropriately and
+			# create a new space to occupy the hole.
+			new_space = _NodeSpace(
+					first.begin + job.time_limit,
+					last.end,
+					self.copy(last.nodes),
+					last.next,
+				    )
+			# new space is following `last`
+			new_space.job_ends = last.job_ends
+			last.job_ends = 0
+			last.end = new_space.begin
+			last.next = new_space
+			last.update()
+		last.job_ends += 1
+		# assign and remove used resources
+		job.alloc = self._assign_resources(first.nodes, job, False)
+		assert self._check_nodes(job.alloc, job), 'invalid resource map'
+
+		it = first
+		while True:
+			it.nodes = self.remove(it.nodes, job.alloc)
+			if it == last:
+				break
+			it = it.next
+
+		if self._debug:
+			self._dump_space('Added resources %s', job)
 		return True
 
 	def try_backfill(self, job):
 		"""
-		Make a reservation for the job.
+		Try to schedule the job. Make a reservation otherwise.
 		Return if the job can be executed immediately.
 		"""
-		total_time = 0
-		it = first = self._space_list
-		avail = None
-		must_check = True
 
+		it = self._space_list
+		res_it = 0
+
+		job_start = it.begin
+
+		rem = self.remove
 		cop = self.copy
-		inter = self.intersect
 		check_j = self._check_nodes
 
 		while True:
-			if must_check:
-				if avail is None:
-					avail = cop(it.avail)
-					#avail = self.copy(it.avail)
-				else:
-					avail = inter(avail, it.avail)
-					#avail = self.intersect(avail, it.avail)
+			avail = cop(it.nodes)
 
-			if not must_check or check_j(avail, job):
-			#if not must_check or self._check_nodes(avail, job):
-				total_time += it.length
-				if total_time >= job.time_limit:
-					last = it
+			job_end = job_start + job.time_limit
+
+			# Maybe we can stop, if the potential start is already
+			# outside of the backfilling window.
+			if job_start >= self._window:
+				break
+
+			for i in xrange(self._rsrv_count):
+				res = self._rsrv_begin[i]  # ordered by begin time
+				if res.begin >= job_end:
 					break
-				# next space #TODO OPIS
-				it = it.next
-				must_check = it.rsrv_starts > 0
+				if res.end <= job_start:
+					continue
+				# the job and the reservation spaces intersect
+				avail = rem(avail, res.nodes)
+
+			if check_j(avail, job):
+				if it == self._space_list:
+					old = self._rsrv_count
+					self._rsrv_count = 0
+					r = self.try_schedule(job)
+					assert r
+					self._rsrv_count = old
+					return r
+				alloc = self._assign_resources(avail, job, True)
+				new_res = _NodeSpace(
+						job_start,
+						job_end,
+						alloc,
+						None
+					  )
+				self._rsrv_count += 1
+				# add to both list, preserving the order
+				#TODO bisect
+				self._rsrv_begin.append(new_res)
+				self._rsrv_begin.sort(key=lambda x: float('inf') if x is None else x.begin)
+				self._rsrv_end.append(new_res)
+				self._rsrv_end.sort(key=lambda x: float('inf') if x is None else x.end)
+				break
 			else:
-				total_time = 0
-				#TODO OPIS
-				it = first = first.next
-				avail = None
-				must_check = True
-				# Maybe we can stop, if the potential start is already
-				# outside of the backfilling window.
-				if first.begin > self._window:
-					return False
-
-		# check if the job can be executed now
-		can_run = (first == self._space_list)
-
-		self._allocate_resources(job, first, last, avail, not can_run)
-		return can_run
-
-	def end_session(self):
-		"""
-		Clear the created reservations.
-		"""
-		before = self._reservations
-		prev, it = None, self._space_list
-
-		while it.next is not None:
-			# update the count
-			self._reservations -= it.rsrv_starts
-			it.rsrv_starts = 0
-			# now clean up
-			if not it.job_ends:
-				# we can safely remove this space
-				remove, it = it, it.next
-				it.begin = remove.begin
-				it.update()
-				prev.next = it
-				remove.next = None
-			else:
-				it.avail = self.add(it.avail, it.reserved)
-				it.reserved = self.clear()
-				prev, it = it, it.next
-
-		assert not self._reservations, 'reservations not cleared'
-		if self._debug:
-			self._dump_space('Cleared %s reservations', before)
+				# We need more resources. Check what happens next:
+				# 1) a job ends, or
+				# 2) reservation ends
+				next_job_end = it.end
+				if res_it < self._rsrv_count:
+					next_res_end = self._rsrv_end[res_it].end
+				else:
+					next_res_end = float('inf')
+				if next_job_end <= next_res_end:
+					it = it.next
+				if next_res_end <= next_job_end:
+					res_it += 1
+				job_start = min(next_job_end, next_res_end)
+		return False
 
 	def job_ended(self, job):
 		"""
 		Free the resources taken by the job.
 		"""
-		assert not self._reservations, 'reservations are present'
 		self._space_list.begin = job.end_time
 		self._space_list.update()
 		assert self._space_list.length >= 0, 'some finished jobs not removed'
@@ -290,7 +262,7 @@ class BaseManager(object):
 		it = self._space_list
 
 		while it.end < last_space_end:
-			it.avail = self.add(it.avail, job.alloc)
+			it.nodes = self.add(it.nodes, job.alloc)
 			it = it.next
 
 		assert it.end == last_space_end, 'missing job last space'
@@ -300,15 +272,14 @@ class BaseManager(object):
 			# we can safely merge this space with the next one
 			remove = it.next
 			it.end = remove.end
-			it.avail = remove.avail
-			it.reserved = remove.reserved
+			it.nodes = remove.nodes
 			it.job_ends = remove.job_ends
 			it.update()
 			# move 'pointers' as the last step
 			it.next = remove.next
 			remove.next = None
 		else:
-			it.avail = self.add(it.avail, job.alloc)
+			it.nodes = self.add(it.nodes, job.alloc)
 			it.job_ends -= 1
 		# finally clear
 		job.alloc = None
