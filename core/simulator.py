@@ -139,7 +139,8 @@ class GeneralSimulator(object):
 		self._diag.forced = 0
 		self._diag.sched_pass = self._diag.sched_jobs = 0
 		self._diag.bf_pass = self._diag.bf_jobs = 0
-		self._diag.avg_util = 0
+		self._diag.prev_util = {'time': None, 'value': 0}
+		self._diag.avg_util = {'period': 0, 'sum': 0.0}
 		self._diag.sim_time = time.time()
 
 		self._results = []
@@ -147,12 +148,16 @@ class GeneralSimulator(object):
 		self._compressor = zlib.compressobj()
 		# link the scheduler to the simulation
 		self._parts.scheduler.set_stats(self._stats)
+		# set the default values
 
 	def _finalize(self):
 		"""
 		Final step after the simulation has ended.
 		"""
 		# finalize diagnostic stats
+		del self._diag.prev_util
+		self._diag.avg_util = (self._diag.avg_util['sum'] /
+				       self._diag.avg_util['period'])
 		self._diag.sim_time = time.time() - self._diag.sim_time
 		self._diag.sched_jobs /= float(len(self._future_jobs))
 		self._diag.bf_jobs /= float(len(self._future_jobs))
@@ -185,7 +190,7 @@ class GeneralSimulator(object):
 
 		# the first job submission is the simulation 'time zero'
 		prev_event = self._future_jobs[0].submit
-		assert not prev_event, 'invalid time zero'
+		self._diag.prev_util['time'] = prev_event
 
 		while sub_iter < sub_total or not self._pq.empty():
 			# We only need to keep two `new_job` events in the
@@ -574,11 +579,13 @@ class GeneralSimulator(object):
 			# shares still the same
 			return False
 
-	def _update_util(self, last_util={}, avg={'period':0, 'sum':0.0}):
+	def _update_util(self):
 		"""
 		Keep track of the system average utility.
 		"""
 		core_st, core_end = self._core_period
+		prev_util = self._diag.prev_util
+		avg_util = self._diag.avg_util
 
 		# If we aren't in the core period, then this will
 		# override one of the core period ends:
@@ -589,18 +596,16 @@ class GeneralSimulator(object):
 		now = max(self._now, core_st)
 		now = min(now, core_end)
 
-		if last_util:
-			period = now - last_util['time']
-			assert period >= 0, 'invalid period'
-			if period:
-				# update the current average
-				avg['period'] += period
-				avg['sum'] += period * last_util['value']
-				self._diag.avg_util = avg['sum'] / avg['period']
-				# add the results
-				self._store_utility(period, last_util['value'])
-		last_util['time'] = now
-		last_util['value'] = self._utility
+		period = now - prev_util['time']
+		assert period >= 0, 'invalid period'
+		if period:
+			# update the current average
+			avg_util['period'] += period
+			avg_util['sum'] += period * prev_util['value']
+			# add the results
+			self._store_utility(period, prev_util['value'])
+		prev_util['time'] = now
+		prev_util['value'] = self._utility
 
 	def _store_prefix(self, event_time, event_msg):
 		"""

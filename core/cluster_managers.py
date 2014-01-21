@@ -46,7 +46,6 @@ class BaseManager(object):
 					None,
 				   )
 		self._space_list.job_ends = 0 #TODO DO KONTRUKTORA??
-		# reservation count, max is equal to `settings.bf_depth`
 		self._rsrv_count = 0
 		# reservations ordered by begin time
 		self._rsrv_begin = []
@@ -234,7 +233,7 @@ class BaseManager(object):
 			else:
 				# We need more resources. Check what happens next:
 				# 1) a job ends, or
-				# 2) reservation ends
+				# 2) a reservation ends
 				next_job_end = it.end
 				if res_it < self._rsrv_count:
 					next_res_end = self._rsrv_end[res_it].end
