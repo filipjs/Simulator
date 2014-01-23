@@ -472,7 +472,8 @@ class GeneralSimulator(object):
 
 		while self._cpu_free and work:
 			job = self._waiting_jobs[prio_iter]
-
+			if bf_mode:
+				logging.debug('bf try job %s', job)
 			if try_func(job):
 				j2 = self._waiting_jobs.pop(prio_iter)
 				assert job == j2, 'scheduled wrong job'
@@ -482,6 +483,8 @@ class GeneralSimulator(object):
 				logging.debug('bf %s started %s', bf_mode, job)
 			elif not bf_mode:
 				break
+			else:
+				logging.debug('bf made reservation')
 
 			prio_iter -= 1
 			work -= 1

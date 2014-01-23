@@ -229,6 +229,8 @@ class BaseManager(object):
 				self._rsrv_begin.sort(key=lambda x: x.begin)
 				self._rsrv_end.append(new_res)
 				self._rsrv_end.sort(key=lambda x: x.end)
+				if self._debug:
+					self._dump_space('Added reservation %s', job)
 				break
 			else:
 				# We need more resources. Check what happens next:
