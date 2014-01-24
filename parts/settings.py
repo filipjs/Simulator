@@ -83,7 +83,7 @@ sim_templates = [
 	Template('block_margin', 'Extra simulation time to fill up'
 		 ' and empty the cluster', 0, 'HOURS'),
 	Template('one_block', 'Simulate only the first block', False),
-	Template('serial', 'Change parallel jobs to serial versions', False),
+	Template('serial', 'Change parallel jobs to serial versions', 0), #TODO LEPSZY OPIS
 	Template('cpu_count', 'Set a static number of CPUs, takes precedence', 0),
 	Template('cpu_percent', 'Set the number of CPUs to the P-th percentile', 70),
 	Template('cpu_per_node', 'Divide the cluster into nodes with'
