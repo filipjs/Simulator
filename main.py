@@ -264,12 +264,10 @@ def simulate_block(block, sched, alg_conf, part_conf):
 	def abla(x):
 		print x
 
-	abla(0)
-
 	# extract the users and reset all instances
 	users = {}
 	time_zero = block[0].submit
-	print "TIME ZERO", time_zero
+
 	for j in block:
 		j.submit -= time_zero
 		j.reset()
@@ -299,9 +297,11 @@ def simulate_block(block, sched, alg_conf, part_conf):
 		r = my_sim.run()
 		abla(2)
 		for j in block:
+			j.submit += time_zero
 			j.reset()
 		for u in users.itervalues():
 			u.reset()
+
 		#from guppy import hpy
 		#h = hpy()
 		#print 'AFTER', block.number, sched, h.heap()
