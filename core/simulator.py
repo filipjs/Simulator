@@ -633,7 +633,7 @@ class GeneralSimulator(object):
 		"""
 		Event message:
 		  CAMP END camp_id user_id real_end_time workload
-		               job_count
+		           job_count
 		"""
 		real_end = camp.completed_jobs[-1].end_time
 		msg = 'CAMP END {} {} {} {} {}\n'.format(

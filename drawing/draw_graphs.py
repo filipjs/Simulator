@@ -22,7 +22,8 @@ class Job(object):
 		# derivative properties
 		self.run_time = self.end - self.start
 		self.wait_time = self.start - self.submit
-		# calculate stretch
+
+	def calc_stretch(self):
 		self.stretch = self._get_stretch()
 
 	def _get_stretch(self):
@@ -39,24 +40,25 @@ class Campaign(object):
 		self.user = args[1]
 		self.start = args[2]
 		self.utility = args[3]
-		self.system_proc = args[4]
 		self.end = None
 		self.workload = None
 		self.jobs = []
 
-	def finalize(self, *args):
+	def finalize(self, system_proc, *args):
 		assert self.ID == args[0], 'wrong campaign'
 		assert self.user == args[1], 'wrong user'
 		self.end = args[2]
 		self.workload = args[3]
 		assert len(self.jobs) == args[4], 'missing jobs'
-		self.longest_job = max(map(lambda j: j.run_time, self.jobs))
-		# calculate stretch
+		self._system_proc = system_proc
+
+	def calc_stretch(self):
+		self._longest_job = max(map(lambda j: j.run_time, self.jobs))
 		self.stretch = self._get_stretch()
 
 	def _get_stretch(self):
-		avg = float(self.workload) / self.system_proc
-		lower_bound = max(avg, self.longest_job)
+		avg = float(self.workload) / self._system_proc
+		lower_bound = max(avg, self._longest_job)
 		length = float(self.end - self.start)
 		return round(length / lower_bound, 2)
 
@@ -72,9 +74,12 @@ class User(object):
 
 	def finalize(self, *args):
 		assert self.ID == args[0], 'wrong user'
+		#assert len(self.jobs) == args[1], 'missing jobs'
+		#assert len(self.camps) == args[2], 'missing camps'
 		self.lost_virt = args[3]
 		self.false_inact = args[4]
-		# calculate stretch
+
+	def calc_stretch(self):
 		self.stretch = self._get_stretch()
 
 	def _get_stretch(self):
@@ -306,67 +311,92 @@ def parse(filename):
 	jobs = []
 	camps = []
 	users = {}
-	utility = [(-1, -1)]  # guard at the start
+	utility = []
 
 	f = open(filename)
 	# check file validity
 	first = f.readline()
 	assert first[0] == '{', 'missing context'
+	second = f.readline()
+	assert second[0] == 'S'
 
 	block_camps = {}
+	block_cpus = None
 
 	for line in f:
 		tokens = line.split()
-		prefix, entity, rest = tokens[0], tokens[1], to_val(tokens[2:])
+		event, rest = tokens[0], to_val(tokens[1:])
 
-		assert prefix in ['CORE', 'MARGIN'], 'invalid prefix'
-		core = (prefix == 'CORE')
+		if event in ['CORE', 'MARG']:
+			true_event = rest.pop(0)
+			core = (event == 'CORE')
 
-		if entity == 'JOB':
-			job = Job(*rest)
-			if core:
+			if true_event == 'JOB':
+				job = Job(*rest)
+				job.core = core
 				jobs.append(job)
-			if (job.camp, job.user) in block_camps:
 				block_camps[(job.camp, job.user)].jobs.append(job)
 				users[job.user].jobs.append(job)
 
-		elif entity == 'CAMPAIGN':
-			if not core:
-				continue
-			event, rest = rest[0], rest[1:]
-			if event == 'START':
-				c = Campaign(*rest)
-				u = users.get(c.user, User(c.user))
-				u.camps.append(c)
-				users[u.ID] = u
-				block_camps[(c.ID, c.user)] = c
 			else:
-				assert event == 'END'
-				block_camps[(rest[0], rest[1])].finalize(*rest)
+				assert true_event == 'CAMP'
+				event_type = rest.pop(0)
 
-		elif entity == 'USER':
-			if rest[0] in users:
+				if event_type == 'START':
+					c = Campaign(*rest)
+					c.core = core
+					block_camps[(c.ID, c.user)] = c
+					u = users.get(c.user, User(c.user))
+					u.camps.append(c)
+					users[u.ID] = u
+				else:
+					assert event_type == 'END'
+					cid, uid = rest[0], rest[1]
+					block_camps[(cid, uid)].finalize(block_cpus, *rest)
+
+		elif event == 'USER':
+			uid = rest[0]
+			if uid in users:
 				users[rest[0]].finalize(*rest)
-			# else -> user without core jobs in this block
-
-		elif entity == 'UTILITY':
-			assert utility[-1][0] <= rest[0], 'utility not sorted'
-			if utility[-1][0] != rest[0]:
-				utility.append([rest[0], rest[1]])
 			else:
-				utility[-1][1] = rest[1]
+				pass # user without core jobs in this block
 
-		elif entity == 'BLOCK':
-			assert rest[0] == 'END'
-			camps.extend(block_camps.itervalues())
-			block_camps = {}
+		elif event == 'UTIL':
+			utility.append([rest[0], rest[1]])
+
+		elif event == 'BLOCK':
+			event_type = rest.pop(0)
+
+			if event_type == 'START':
+				block_cpus = rest[0]
+			else:
+				assert event_type == 'END'
+				camps.extend(block_camps.itervalues())
+				block_camps = {}
+				block_cpus = None
 
 		else:
-			assert entity in ['DIAG']
-
-	# remove guard
-	assert utility.pop(0) == (-1, -1), 'missing guard'
+			print event
+			assert False, 'unknown event'
 	f.close()
+
+	def only_core(e):
+		return e.core
+
+	jobs = filter(only_core, jobs)
+	camps = filter(only_core, camps)
+	for uid, u in users.items():
+		u.jobs = filter(only_core, u.jobs)
+		u.camps = filter(only_core, u.camps)
+		if not len(u.camps):
+			del users[uid]
+
+	for j in jobs:
+		j.calc_stretch()
+	for c in camps:
+		c.calc_stretch()
+	for u in users.itervalues():
+		u.calc_stretch()
 
 	#for u in sorted(users.itervalues(), key=lambda x: x.ID):
 		#print u.ID, u.stretch
@@ -412,8 +442,8 @@ def run_draw(args):
 		(cdf, "campaigns", {}),
 		(average, "users", {}),
 		#(job_runtime, "jobs", {}),
-		(utility, "total", {}),
-		(diff_heat, "campaigns", {}),
+		#(utility, "total", {}),
+		#(diff_heat, "campaigns", {}),
 	]
 
 	for i, (g, key, kwargs) in enumerate(graphs):
