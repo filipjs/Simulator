@@ -298,6 +298,7 @@ def simulate_block(block, sched, alg_conf, part_conf):
 		cProfile.runctx('print my_sim.run()[1].__dict__',
 				globals(), locals(),
 				sort='cumulative')
+		sys.exit(0)
 
 
 def setup_logging(debug):
@@ -378,7 +379,7 @@ def run(workload, args):
 	if sim_conf.one_block:
 		blocks = blocks[:1]
 
-	async_results = {sched: [] for sched in part_conf.schedulers}
+	results = {sched: [] for sched in part_conf.schedulers}
 	global_start = time.time()
 
 	print '-' * 50
@@ -407,18 +408,21 @@ def run(workload, args):
 		for sched in part_conf.schedulers:
 			params = (bl, sched, alg_conf, part_conf)
 
-			if not PROFILE_FLAG:
+			if run_async:
 				async_r = my_pool.apply_async(simulate_block, params)
-				async_results[sched].append(async_r)
+				results[sched].append(async_r)
 			else:
-				print bl, sched
-				simulate_block(*params)
+				r = simulate_block(*params)
+				results[sched].append(r)
 
-	if PROFILE_FLAG:
-		return
+	if run_async:
+		# wait for the asynchronous results
+		for sched_results in results.itervalues():
+			for sim_result in sched_results:
+				# ctr-c doesn't seem to work without timeout
+				sim_result.wait(60*60*24*365)
 
-	# wait for the results and than save them
-	for sched, sim_results in async_results.iteritems():
+	for sched, sched_results in results.iteritems():
 		time_stamp = time.localtime(global_start)
 		filename = '{}-{}-{}'.format(
 			sim_conf.title,
@@ -428,18 +432,23 @@ def run(workload, args):
 		filename = os.path.join(sim_conf.output, filename)
 
 		f = open(filename, 'w')
+		f.write('# Description of the output can be found in core/simulator.py'
+		        ' in the GeneralSimulator._store_X methods\n')
 		f.write('%s\n' % args)  # original arguments
 		f.write('SIMULATION START %s\n' % time.ctime(global_start))
 
-		for i, async_r in enumerate(sim_results):
-			# display simulation progress
+		for i, sim_result in enumerate(sched_results):
 			if sim_conf.cpu_count:
 				m = '{0} : {1}'
 			else:
 				m = '{0} ({2}-th percentile) : {1}'
 			logging.info(m.format(blocks[i], sched, sim_conf.cpu_percent))
-			# ctr-c doesn't seem to work without timeout
-			r, diag = async_r.get(timeout=60*60*24*365)
+
+			if run_async:
+				r, diag = sim_result.get(10)
+			else:
+				r, diag = sim_result
+
 			print_stats(diag)
 			# save partial results to file
 			f.write('BLOCK START %s\n' % blocks[i].cpus)
