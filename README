@@ -1,2 +1,22 @@
-todo readme
+#todo readme
 
+Basic workflow:
+
+0) Read help.
+	python main.py -h
+	python main.py run -h
+	python main.py config -h
+
+1) Create a config file.
+	python main.py config --generate > my_conf
+
+2) Edit the config to fill your needs
+   Note: Setting a value to 0 usually means that a specific feature is turned off.
+
+3) Run the simulation.
+	python main.py run some_workload.swf @my_conf
+
+4) Draw graphs.
+	python draw/draw_graphs.py output_dir1 output_dir2
+
+5) #TODO Create your own parts
