@@ -32,16 +32,16 @@ class BaseParser(object):
 
 	__metaclass__ = ABCMeta
 
-	REQUIRED = ['job_id', 'user_id', 'submit', 'run_time', 'proc']
-	OPTIONAL = ['nodes', 'pn_cpus']
+	REQUIRED = ['job_id', 'submit', 'run_time', 'proc', 'user_id']
+	OPTIONAL = ['time_limit', 'nodes', 'pn_cpus']
 
 	def parse_workload(self, filename, serial):
 		"""
 		Parse the file and create :mod: `entities` from the data.
 
 		Args:
-		  filename: path to some workload file.
-		  serial: change parallel jobs to multiple serial ones.
+		  filename: path to a workload file.
+		  serial: limit the number of CPUs to this value.
 
 		Returns:
 		  a list of `Jobs` already linked to `User` instances.
@@ -108,7 +108,7 @@ class BaseParser(object):
 		"""
 		Do the following:
 		  1) Check if `stats` contain required values.
-		  2) Check if job has unique ID.
+		  2) Check if the job has an unique ID.
 		  3) Auto-complete optional data.
 
 		Raises `InvalidStatsError`.
@@ -192,7 +192,7 @@ class SWFParser(BaseParser):
 		'wait_time': 2,
 		'run_time': 3,
 		'proc': 4,
-		'req_time': 8,
+		'time_limit': 8,
 		'user_id': 11,
 		'partition': 15
 	}

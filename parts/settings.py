@@ -40,9 +40,9 @@ class Template(object):
 		self.default = default
 		if time_unit is not None:
 			self.time_unit = time_unit.upper()
-			assert self.time_unit in time_units
+			assert self.time_unit in time_units, 'invalid time unit'
 		else:
-			self.time_unit = time_unit
+			self.time_unit = None
 		self.loc = loc
 
 
@@ -83,7 +83,7 @@ sim_templates = [
 	Template('block_margin', 'Extra simulation time to fill up'
 		 ' and empty the cluster', 0, 'HOURS'),
 	Template('one_block', 'Simulate only the first block', False),
-	Template('serial', 'Change parallel jobs to serial versions', 0), #TODO LEPSZY OPIS
+	Template('serial', 'Serialize jobs to use at most `serial` number of CPUs', 0),
 	Template('cpu_count', 'Set a static number of CPUs, takes precedence', 0),
 	Template('cpu_percent', 'Set the number of CPUs to the P-th percentile', 70),
 	Template('cpu_per_node', 'Divide the cluster into nodes with'
@@ -108,7 +108,8 @@ class Settings(object):
 		for temp in templates:
 			value = kwargs[temp.name]
 			# change the time if applicable
-			if temp.time_unit in time_units:
+			if temp.time_unit is not None:
+				assert temp.time_unit in time_units, 'invalid time unit'
 				value *= time_units[temp.time_unit]
 			# set the attribute
 			setattr(self, temp.name, value)

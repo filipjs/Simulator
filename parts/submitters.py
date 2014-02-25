@@ -5,7 +5,7 @@ from abc import ABCMeta, abstractmethod
 Submitters:
 	A submitter is used to simulate a job owner who sets the (possibly inaccurate)
 	job time limit. We are however assuming that the time limit **CANNOT** be lower
-	than the job run time.
+	than the job real run time.
 	A submitter is also used to set the required number of nodes for the job.
 
 Customizing:
@@ -37,8 +37,9 @@ class BaseSubmitter(object):
 		Public wrapper method.
 		Run and check the correctness of `_get_limit`.
 		"""
+		prev = job.time_limit
 		limit = self._get_limit(job)
-		assert job.time_limit is None, 'time limit already set'
+		assert job.time_limit == prev, 'time limit was changed'
 		assert limit >= job.run_time, 'invalid time limit'
 		return limit
 
@@ -57,8 +58,8 @@ class BaseSubmitter(object):
 		Override this if you want to change the job node configuration.
 
 		For example you do not want to alter your workload file but still
-		want to use this feature and you prepared some static rules to
-		determine the `nodes` and/or `pn_cpus` values.
+		want to use this feature and you have prepared some rules to
+		determine the `nodes` and/or the `pn_cpus` values.
 
 		Note:
 		  You **HAVE TO** to modify the job attributes `job.nodes`
@@ -74,6 +75,15 @@ class OracleSubmitter(BaseSubmitter):
 
 	def _get_limit(self, job):
 		return job.run_time
+
+
+class FromWorkloadSubmitter(BaseSubmitter):
+	"""
+	Use the value supplied in the workload file.
+	"""
+
+	def _get_limit(self, job):
+		return job.time_limit
 
 
 class DefaultTimeSubmitter(BaseSubmitter):

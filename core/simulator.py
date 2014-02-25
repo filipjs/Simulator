@@ -42,8 +42,8 @@ class PriorityQueue(object):
 		if key in self._entries:
 			# mark an existing event as removed
 			self._entries[key][-1] = self._REMOVED
-		# counter prevents the comparison of entities,
-		# in case the time and the event are the same
+		# Counter prevents the comparison of entities,
+		# in case the time and the event are the same.
 		entry = [time, event, next(self._counter), entity]
 		self._entries[key] = entry
 		heapq.heappush(self._pq, entry)
@@ -109,7 +109,7 @@ class GeneralSimulator(object):
 		  parts: *instances* of all the system parts
 		"""
 		assert block and users, 'invalid arguments'
-		self._future_jobs = block
+		self._block = block
 		self._waiting_jobs = []
 		self._users = users
 		self._settings = settings
@@ -158,8 +158,8 @@ class GeneralSimulator(object):
 		self._diag.avg_util = (self._diag.avg_util['sum'] /
 				       self._diag.avg_util['period'])
 		self._diag.sim_time = time.time() - self._diag.sim_time
-		self._diag.sched_jobs /= float(len(self._future_jobs))
-		self._diag.bf_jobs /= float(len(self._future_jobs))
+		self._diag.sched_jobs /= float(len(self._block))
+		self._diag.bf_jobs /= float(len(self._block))
 		# clear the link to the scheduler
 		self._parts.scheduler.clear_stats()
 
@@ -180,7 +180,7 @@ class GeneralSimulator(object):
 		self._initialize()
 
 		sub_iter = sub_count = 0
-		sub_total = len(self._future_jobs)
+		sub_total = len(self._block)
 		end_iter = 0
 
 		schedule = backfill = False
@@ -188,17 +188,20 @@ class GeneralSimulator(object):
 			      not self._settings.bf_interval)
 
 		# the first job submission is the simulation 'time zero'
-		prev_event = self._future_jobs[0].submit
+		prev_event = self._block[0].submit
 		self._diag.prev_util['time'] = prev_event
+
+		visual_update = 60 * 15  # notify the user about the progress
+		next_visual = prev_event + visual_update
 
 		while sub_iter < sub_total or not self._pq.empty():
 			# We only need to keep two `new_job` events in the
 			# queue at the same time (one to process, one to peek).
 			while sub_iter < sub_total and sub_count < 2:
 				self._pq.add(
-					self._future_jobs[sub_iter].submit,
+					self._block[sub_iter].submit,
 					Events.new_job,
-					self._future_jobs[sub_iter]
+					self._block[sub_iter]
 				)
 				sub_iter += 1
 				sub_count += 1
@@ -238,7 +241,7 @@ class GeneralSimulator(object):
 			elif event == Events.bf_run:
 				backfill = True
 			elif event == Events.campaign_end:
-				# We need to redistribute beforehand
+				# We need to redistribute the virtual time now,
 				# so the campaign can actually end.
 				self._virt_second_stage()
 				virt_second = False  # already done
@@ -254,7 +257,7 @@ class GeneralSimulator(object):
 			prev_event = self._now
 
 			if not self._pq.empty():
-				# We need to process the events that happen at
+				# We need to process all the events that happen at
 				# the same time *AND* change the campaign workloads
 				# before we can continue further.
 				next_time, next_event, _ = self._pq.peek()
@@ -294,6 +297,14 @@ class GeneralSimulator(object):
 				# so we need an accurate usage.
 				assert not self._pq.empty(), 'infinite loop'
 				self._next_force_decay()
+
+			# progress report
+			if self._now > next_visual:
+				next_visual += visual_update
+				comp = float(sub_iter + end_iter) / (2 * sub_total)
+				msg = 'Block {:2} scheduler {}: {} completed {:.2f}%'
+				print msg.format(self._block.number, self._parts.scheduler,
+						 time.strftime('%H:%M:%S'), comp * 100)
 
 		self._finalize()
 		# Results for each user should be in this order:
@@ -379,7 +390,7 @@ class GeneralSimulator(object):
 
 	def _next_backfill(self, start):
 		"""
-		Add the next backfill event from `start`.
+		Add the next backfill event after `start`.
 		"""
 		if (not self._settings.bf_depth or
 		    not self._settings.bf_interval):
@@ -576,7 +587,7 @@ class GeneralSimulator(object):
 			return True
 		else:
 			self._queue_camp_end(user.active_camps[0])
-			# shares still the same
+			# shares are still the same
 			return False
 
 	def _update_util(self):
@@ -588,24 +599,23 @@ class GeneralSimulator(object):
 		avg_util = self._diag.avg_util
 
 		# If we aren't in the core period, then this will
-		# override one of the core period ends:
-		# 1) core start - this will eventually update the
-		#    starting utility to the correct value
-		# 2) core end - only the time value is used from
-		#    the last point, the utility value doesn't matter
-		now = max(self._now, core_st)
-		now = min(now, core_end)
+		# override one of the period end.
+		st = max(prev_util['time'], core_st)
+		end = min(self._now, core_end)
 
-		period = now - prev_util['time']
-		assert period >= 0, 'invalid period'
-		if period:
+		period = end - st
+		if period > 0:
 			# update the current average
 			avg_util['period'] += period
 			avg_util['sum'] += period * prev_util['value']
 			# add the results
 			self._store_utility(period, prev_util['value'])
-		prev_util['time'] = now
+		prev_util['time'] = self._now
 		prev_util['value'] = self._utility
+
+	###
+	### The format of the returned events.
+	###
 
 	def _store_prefix(self, event_time, event_msg):
 		"""
@@ -622,7 +632,7 @@ class GeneralSimulator(object):
 	def _store_camp_created(self, camp):
 		"""
 		Event message:
-		  CAMP START camp_id user_id creation_time utility
+		  [CORE/MARG] CAMP START camp_id user_id creation_time utility
 		"""
 		msg = 'CAMP START {} {} {} {:.4f}\n'.format(
 			camp.ID, camp.user.ID, camp.created,
@@ -632,8 +642,8 @@ class GeneralSimulator(object):
 	def _store_camp_ended(self, camp):
 		"""
 		Event message:
-		  CAMP END camp_id user_id real_end_time workload
-		           job_count
+		  [CORE/MARG] CAMP END camp_id user_id real_end_time
+		                       workload job_count
 		"""
 		real_end = camp.completed_jobs[-1].end_time
 		msg = 'CAMP END {} {} {} {} {}\n'.format(
@@ -644,8 +654,8 @@ class GeneralSimulator(object):
 	def _store_job_ended(self, job):
 		"""
 		Event message:
-		  JOB job_id camp_id user_id submit start end
-		      final_estimate time_limit processor_count
+		  [CORE/MARG] JOB job_id camp_id user_id submit start end
+		                  final_estimate time_limit processor_count
 		"""
 		msg = 'JOB {} {} {} {} {} {} {} {} {}\n'.format(
 			job.ID, job.camp.ID, job.user.ID,

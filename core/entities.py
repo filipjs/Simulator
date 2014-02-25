@@ -27,19 +27,18 @@ class Job(object):
 	  4) execution ended
 	"""
 
-	__slots__ = ('ID', 'proc', 'nodes', 'pn_cpus', 'submit', 'run_time', 'user',
-		     'time_limit', 'camp', '_start', '_completed', 'estimate', 'alloc')
+	__slots__ = ('ID', 'submit', 'run_time', 'proc', 'user', 'time_limit', 'nodes',
+		     'pn_cpus', 'camp', '_start', '_completed', 'estimate', 'alloc')
 
 	def __init__(self, stats, user):
-		#self._orig = stats #TODO ZROBIC ZEBY MNIEJ RAMU ZAJMOWALO
 		self.ID = stats['job_id']
-		self.proc = stats['proc']
-		self.nodes = stats['nodes']
-		self.pn_cpus = stats['pn_cpus']
 		self.submit = stats['submit']
 		self.run_time = stats['run_time']
+		self.proc = stats['proc']
 		self.user = user
-		self.time_limit = None
+		self.time_limit = stats['time_limit']
+		self.nodes = stats['nodes']
+		self.pn_cpus = stats['pn_cpus']
 
 	def reset(self):
 		self.camp = None
@@ -217,7 +216,7 @@ class User(object):
 	def add_virtual(self, value):
 		"""
 		Add the `value` long period to the virtual pool,
-		which will be processed in next `virtual_work` call.
+		which will be processed in the next `virtual_work` call.
 		"""
 		self._virt_pool += value
 

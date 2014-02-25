@@ -33,6 +33,7 @@ class Block(object):
 	  last - (index of) the last job of the core
 	  right - (index of) the last job of the right margin
 	"""
+
 	def __init__(self, jobs, inx, block_time, num):
 		"""
 		Args:

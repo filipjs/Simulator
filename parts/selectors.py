@@ -71,7 +71,7 @@ class VirtualSelector(BaseSelector):
 	def _get_camp(self, job):
 		"""
 		Check the job submit time against the last campaign
-		creation time extended by threshold value.
+		creation time extended by the threshold value.
 		Create a new campaign if the submit time is out of range.
 		"""
 		user = job.user
@@ -81,10 +81,10 @@ class VirtualSelector(BaseSelector):
 			if job.submit < last.created + self._settings.threshold:
 				return last
 		elif user.completed_camps:
-			# a campaign could end without surpassing the threshold
+			# a campaign can end without surpassing the threshold
 			last = user.completed_camps[-1]
 			if job.submit < last.created + self._settings.threshold:
-				# move the campaign back to active ones
+				# move the campaign back to the active ones
 				user.completed_camps.pop()
 				user.active_camps.append(last)
 				return last

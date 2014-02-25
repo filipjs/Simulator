@@ -21,8 +21,8 @@ class BaseScheduler(object):
 
 	Note:
 	  You can also change the value of `only_virtual` or `only_real`
-	  if your scheduler is only using information about virtual campaigns
-	  or user/system CPU usage, respectively.
+	  if your scheduler is using only the information about virtual campaigns
+	  or the user/system CPU usage, respectively.
 	  This can result in about 10%-30% faster simulation.
 
 	"""
@@ -81,11 +81,11 @@ class OStrich(BaseScheduler):
 	def job_priority_key(self, job):
 		"""
 		Priority ordering for the scheduler:
-		1) faster ending campaigns
+		1) earlier ending campaigns
 		2) earlier created campaigns
-		3) camp ID, user ID (needed to break previous ties)
+		3) user ID, camp ID (needed to break previous ties)
 		4) priority inside campaigns
-		     (tied here iff jobs are from the same campaign)
+		     (ties here iff jobs are from the same campaign)
 
 		Inside campaigns order by shorter run time estimate.
 		In case of ties order by earlier submit.
@@ -96,7 +96,7 @@ class OStrich(BaseScheduler):
 		#   `_stats.active_shares` / `_stats.cpu_used`.
 		# However, that gives the same value for all the jobs
 		# and we only need the ordering, not the absolute value.
-		return (end, camp.created, camp.ID, user.ID,
+		return (end, camp.created, user.ID, camp.ID,
 			job.estimate, job.submit, job.ID)
 
 
@@ -119,7 +119,6 @@ class Fairshare(BaseScheduler):
 		  shares_norm = my share / total shares
 
 		The priority then is multiplied by some weight (usually around 10k-100k).
-		This means, that at high over-usage all priorities are the same.
 		"""
 		if not self._stats.total_usage:
 			fairshare = 1
@@ -129,4 +128,5 @@ class Fairshare(BaseScheduler):
 			shares_norm = user.shares  # already normalized
 			fairshare = 2.0 ** -(effective / shares_norm)
 		prio = int(fairshare * 100000)  # higher value -> higher priority
+		# TODO zmienic 100k na settings, dodac setting do 'job size prio'
 		return (-prio, job.submit, job.ID)

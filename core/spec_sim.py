@@ -5,7 +5,7 @@ from simulator import GeneralSimulator
 class VirtualSimulator(GeneralSimulator):
 	"""
 	A specialized version of the `GeneralSimulator`.
-	Only keeps track about virtual campaigns.
+	Only keeps track of the virtual campaigns.
 	"""
 
 	def _real_first_stage(self, period):
@@ -22,7 +22,7 @@ class VirtualSimulator(GeneralSimulator):
 class RealSimulator(GeneralSimulator):
 	"""
 	A specialized version of the `GeneralSimulator`.
-	Only keeps track about real CPU usage.
+	Only keeps track of the real CPU usage.
 	"""
 
 	def _virt_first_stage(self, period):
