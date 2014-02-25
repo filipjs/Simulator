@@ -181,11 +181,11 @@ def threshold_percentile(jobs):
 	values = []
 
 	for j in jobs:
-		last = last_sub.get(j.user.ID, j.submit)
-		values.append(j.submit - last)
-		last_sub[j.user.ID] = j.submit
+		jid = j.user.ID
+		if jid in last_sub:
+			values.append(j.submit - last_sub[jid])
+		last_sub[jid] = j.submit
 
-	values = values[len(last_sub):]
 	values.sort()
 	for i in xrange(50, 100):
 		p = i / 100.
@@ -241,7 +241,6 @@ def print_stats(diag):
 	logging.info(line1.format(**vars(diag)))
 	logging.info(line2.format(**vars(diag)))
 
-from memory_profiler import profile
 
 def simulate_block(block, sched, alg_conf, part_conf):
 	"""
@@ -261,10 +260,6 @@ def simulate_block(block, sched, alg_conf, part_conf):
 	assert block.cpus and block.nodes, 'invalid block configuration'
 	assert block.cpus == sum(block.nodes.itervalues()), 'invalid nodes'
 
-	@profile
-	def abla(x):
-		print x
-
 	# extract the users and reset all instances
 	users = {}
 	time_zero = block[0].submit
@@ -279,34 +274,24 @@ def simulate_block(block, sched, alg_conf, part_conf):
 	part_conf.scheduler = sched
 	params = (block, users, alg_conf, part_conf)
 
-	assert not (sched.only_virtual and sched.only_real), 'invalid scheduler'
+	assert not sched.only_virtual or not sched.only_real, 'invalid scheduler'
 	if sched.only_virtual:
 		my_sim = spec_sim.VirtualSimulator(*params)
 	elif sched.only_real:
 		my_sim = spec_sim.RealSimulator(*params)
 	else:
 		my_sim = simulator.GeneralSimulator(*params)
-	abla(1)
-	logging.log(15, '{} using {}'.format(sched, my_sim))
 
-	#from guppy import hpy
-	#h = hpy()
-	#print 'BEFORE', block.number, sched, h.heap()
-	#print "BLOCK LEN", len(block)
+	logging.log(15, '{} using {}'.format(sched, my_sim))
 
 	if not PROFILE_FLAG:
 		r = my_sim.run()
-		abla(2)
+		# restore original values
 		for j in block:
 			j.submit += time_zero
 			j.reset()
 		for u in users.itervalues():
 			u.reset()
-
-		#from guppy import hpy
-		#h = hpy()
-		#print 'AFTER', block.number, sched, h.heap()
-		#print 'RESULTS', len(r[0])
 		return r
 	else:
 		import cProfile
@@ -343,7 +328,12 @@ def run(workload, args):
 	Run one simulation for each supplied ``scheduler``.
 	"""
 
-	if not PROFILE_FLAG:
+	multi_sched = len(args['schedulers']) > 1
+	multi_blocks = args['block_time'] and not args['one_block']
+
+	run_async = multi_sched or multi_blocks
+
+	if run_async:
 		# Prepare the worker pool. Leave one CPU free,
 		# so the operating system can stay responsive.
 		my_pool = multiprocessing.Pool(multiprocessing.cpu_count() - 1)
@@ -483,11 +473,14 @@ def config(args):
 	else:
 	        from ast import literal_eval
 		with open(args['recreate']) as f:
-			line = f.readline()
-			if line[0] == '{':
-				values = literal_eval(line)
-			else:
-				raise Exception('no context in file %s' % args['recreate'])
+			for line in f:
+				if line[0] == '#':
+					continue
+				elif line[0] == '{':
+					values = literal_eval(line)
+				else:
+					raise Exception('no context in file %s'
+							% args['recreate'])
 
 	def str_value(value):
 		"""
