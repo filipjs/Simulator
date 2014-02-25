@@ -1,6 +1,8 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 import argparse
+import collections
+import itertools
 import math
 import matplotlib.pyplot as plt
 import numpy as np
@@ -24,11 +26,8 @@ class Job(object):
 		self.wait_time = self.start - self.submit
 
 	def calc_stretch(self):
-		self.stretch = self._get_stretch()
-
-	def _get_stretch(self):
 		v = float(self.run_time + self.wait_time) / self.run_time
-		return round(v, 2)
+		self.stretch = round(v, 2)
 
 	def __repr__(self):
 		return u"wait {}, runtime {}".format(self.wait_time, self.run_time)
@@ -53,14 +52,11 @@ class Campaign(object):
 		self._system_proc = system_proc
 
 	def calc_stretch(self):
-		self._longest_job = max(map(lambda j: j.run_time, self.jobs))
-		self.stretch = self._get_stretch()
-
-	def _get_stretch(self):
 		avg = float(self.workload) / self._system_proc
-		lower_bound = max(avg, self._longest_job)
+		longest_job = max(map(lambda j: j.run_time, self.jobs))
+		lower_bound = max(avg, longest_job)
 		length = float(self.end - self.start)
-		return round(length / lower_bound, 2)
+		self.stretch = round(length / lower_bound, 2)
 
 	def __repr__(self):
 		return '{} {} {}'.format(len(self.jobs), self.workload, self.stretch)
@@ -74,18 +70,17 @@ class User(object):
 
 	def finalize(self, *args):
 		assert self.ID == args[0], 'wrong user'
-		#assert len(self.jobs) == args[1], 'missing jobs'
-		#assert len(self.camps) == args[2], 'missing camps'
 		self.lost_virt = args[3]
 		self.false_inact = args[4]
 
-	def calc_stretch(self):
-		self.stretch = self._get_stretch()
-
-	def _get_stretch(self):
-		total = sum(map(lambda c: c.stretch, self.camps))
-		avg = total / len(self.camps)
+	def _get_avg(self, container):
+		total = sum(map(lambda x: x.stretch, container))
+		avg = total / len(container)
 		return round(avg, 2)
+
+	def calc_stretch(self):
+		self.stretch = self.camp_stretch = self._get_avg(self.camps)
+		self.job_stretch = self._get_avg(self.jobs)
 
 	def __repr__(self):
 		return '{} {}'.format(self.camps, self.stretch)
@@ -97,14 +92,14 @@ def _get_color(i):
 	return c[i]
 
 
-def cdf(simulations, key, **kwargs):
+def cdf(simulations, key):
 	""" Stretch CDF """
 
 	plt.xlabel('stretch')
 	plt.ylabel('fraction of ' + key)
 
 	plt.xscale('log', subsx=[])
-	plt.axis([1, 250, 0.3, 1])
+	plt.axis([1, 300, 0.25, 1])
 	plt.xticks([1, 10, 100], [1, 10, 100])
 
 	for i, (sim, data) in enumerate(simulations.iteritems()):
@@ -126,58 +121,28 @@ def cdf(simulations, key, **kwargs):
 		plt.plot(x, y, color=_get_color(i), label=sim)
 
 
-def job_runtime(data, key, **kwargs):
-	""" Stretch CDF """
-	#TODO
-	plt.xlabel('job runtime')
-	plt.ylabel('average stretch')
-
-	plt.xscale('log', subsx=[])
-	plt.axis([2, 10000, 0, 60])
-	plt.xticks([2, 20, 120, 120*24], ['1min', '10min', '1hour', '1day'])
-
-	for i in range(1):
-		values = {}
-
-		for sim in data:
-			d = sim[i]
-
-			for ele in d[key]:
-				kk = ele.runtime / 2
-				j = values.pop(kk, [])
-				j.append(ele.stretch)
-				values[kk] = j
-
-		x, y = [], []
-
-		for k, v in sorted(values.items(), key=lambda x: x[0]):
-			x.append(k*2)
-			y.append(round(sum(v) / float(len(v)), 2))
-
-		plt.plot(x, y, color=_get_color(i), lw=2)
-				#label=_get_label(i), lw=2)
-
-def diff_heat(simulations, key, **kwargs):
+def heatmap(simulations, key):
 	""" Heatmap """
 
-	if len(simulations) != 2:
-		print 'Heatmap difference only from two plots'
+	if len(simulations) > 2:
+		print 'Heatmap only from a maximum of two plots'
 		return
 
+	colorbar_range = 300
 	max_y = 10
 
 	v = {}
 	for i in range(11, 20+1): # utility incremented by 0.05
 		ut = (i*5) / 100.
 		# stretch <1, max_y> incremented by 0.1
-		v[ut] = {j/10.:0 for j in range(1, max_y * 10 + 1)}
+		v[ut] = {j/10.:0 for j in range(10, max_y * 10)}
 
 	for i, (sim, data) in enumerate(simulations.iteritems()):
 
 		if i == 0:
-			m = -1	# ostr
+			m = +1
 		else:
-			m = +1	# fair
+			m = -1
 
 		for c in data['campaigns']:
 			ut = c.utility
@@ -186,7 +151,7 @@ def diff_heat(simulations, key, **kwargs):
 
 			s = math.ceil(c.stretch * 10.) / 10.
 
-			v[ut][min(max_y, s)] += m
+			v[ut][min(max_y - 0.1, s)] += m
 
 	v = sorted(v.items(), key=lambda x: x[0])  # sort by utility
 
@@ -196,30 +161,36 @@ def diff_heat(simulations, key, **kwargs):
 		heat.extend(map(lambda x: x[1], j))  # add values
 
 	heat = np.array(heat)
-	heat.shape = (10, max_y * 10)
+	heat.shape = (10, (max_y - 1) * 10)
 
 	#plt.pcolor(heat.T, label='b', cmap=plt.cm.hot_r)
-	plt.pcolor(heat.T, label='b', cmap='RdBu', vmin=-300, vmax=300)
+	plt.pcolor(heat.T, label='b', cmap='RdBu',
+		   vmin=-colorbar_range, vmax=colorbar_range)
 	plt.colorbar(shrink=0.7)
 
 	x_ax = np.arange(0, 11)
 	plt.xticks(x_ax, x_ax/20. + 0.5)
 	plt.xlabel('cluster utilization at the time of campaign submission')
 
-	y_ax = np.arange(0, (max_y + 1) * 10, 10)
-	plt.yticks(y_ax, map(str, y_ax/10.)[:-1] + [str(max_y) + " or more"])
+	y_ax = np.arange(0, max_y * 10, 10)
+	plt.yticks(y_ax, map(str, y_ax/10. + 1)[:-1] + [str(max_y) + " or more"])
 	plt.ylabel('campaign stretch')
 
 
-def average(simulations, key, **kwargs):
-	"""// Campaigns Average Stretch """
+def average_per_user(simulations, key):
+	""" Average Stretch per User """
 
 	plt.xlabel('users')
-	plt.ylabel('stretch')
+	plt.ylabel(key + ' stretch')
+
+	if key == 'jobs':
+		value = 'job_stretch'
+	else:
+		value = 'camp_stretch'
 
 	for i, (sim, data) in enumerate(simulations.iteritems()):
 
-		y = map(lambda u: u.stretch, data['users'].itervalues())
+		y = map(lambda u: getattr(u, value), data['users'].itervalues())
 		y.sort()
 		x = range(len(y))
 
@@ -227,53 +198,40 @@ def average(simulations, key, **kwargs):
 	plt.axis([0, len(y), 0, 100])
 
 
-def utility(simulations, key, **kwargs):
+def utility(simulations, key):
 	""" Utilization """
 
-	if len(simulations) < 2:
-		print 'Utility difference only from maximum two plots'
+	if len(simulations) > 2:
+		print 'Utility graph only from a maximum of two plots'
 		return
 
-	def timeline(ut, first, last):
-		c = first
-		true_end = min(last, ut[-1][0])
-		i, val = 0, 0
-		while c < true_end:
-			if c < ut[i][0]:
-				yield val
-				c += 1
-			else:
-				assert ut[i][0] < ut[i+1][0], 'utility duplicate'
-				val = ut[i][1]
-				i += 1
-		while c < last:
-			yield 0
-			c += 1
+	def timeline(ut, step):
+		padded = itertools.chain(ut, [(step-1, 0)])
+		total, needed = 0.0, step
+		for (period, value) in padded:
+			while period > 0:
+				avail = min(period, needed)
+				period -= avail
+				needed -= avail
+				total += avail * value
 
-	st = float('inf')
-	end = 0
+				if not needed:
+					yield total / step
+					total, needed = 0.0, step
+
+	count = 0
 
 	for data in simulations.itervalues():
-		ut = data['utility']
-		st = min(st, ut[0][0])
-		end = max(end, ut[-1][0])
+		total = sum(map(lambda u: u[0], data['utility']))
+		count = max(count, total)
 
-	period = int(math.ceil( (end - st) / 100.0 ))
+	graph_points = 200.
+	period = int(math.ceil( count / graph_points ))
 
 	plots = []
 
-	for i, (sim, data) in enumerate(simulations.iteritems()):
-		ut = data['utility']
-		y = []
-		avg = 0.0
-
-		for t, val in enumerate(timeline(ut, st, end)):
-			if t and t % period == 0:
-				y.append(avg / period)
-				avg = 0.0
-			avg += val
-		# add last point
-		y.append(avg / period)
+	for data in simulations.itervalues():
+		y = list(timeline(data['utility'], period))
 		plots.append(y)
 
 	if len(plots) == 1:
@@ -282,7 +240,8 @@ def utility(simulations, key, **kwargs):
 		plt.axis([0, len(y), 0, 1])
 	else:
 		plt.ylabel('difference in utilization')
-		y = map(lambda a,b: a - b, plots[0], plots[1])
+		plot = itertools.izip_longest(plots[0], plots[1], fillvalue=0)
+		y = map(lambda (a, b): a - b, plot)
 		plt.axis([0, len(y), -0.5, 0.5])
 		plt.axhline(color='k', ls='--')
 
@@ -315,10 +274,12 @@ def parse(filename):
 
 	f = open(filename)
 	# check file validity
-	first = f.readline()
-	assert first[0] == '{', 'missing context'
-	second = f.readline()
-	assert second[0] == 'S'
+	for line in f:
+		if line[0] == '#':
+			continue  # skip comments
+		else:
+			assert line[0] == '{', 'missing context'
+			break
 
 	block_camps = {}
 	block_cpus = None
@@ -337,7 +298,6 @@ def parse(filename):
 				jobs.append(job)
 				block_camps[(job.camp, job.user)].jobs.append(job)
 				users[job.user].jobs.append(job)
-
 			else:
 				assert true_event == 'CAMP'
 				event_type = rest.pop(0)
@@ -353,17 +313,14 @@ def parse(filename):
 					assert event_type == 'END'
 					cid, uid = rest[0], rest[1]
 					block_camps[(cid, uid)].finalize(block_cpus, *rest)
-
 		elif event == 'USER':
 			uid = rest[0]
 			if uid in users:
 				users[rest[0]].finalize(*rest)
 			else:
 				pass # user without core jobs in this block
-
 		elif event == 'UTIL':
 			utility.append([rest[0], rest[1]])
-
 		elif event == 'BLOCK':
 			event_type = rest.pop(0)
 
@@ -374,7 +331,8 @@ def parse(filename):
 				camps.extend(block_camps.itervalues())
 				block_camps = {}
 				block_cpus = None
-
+		elif event == 'SIMULATION':
+			pass
 		else:
 			print event
 			assert False, 'unknown event'
@@ -398,16 +356,6 @@ def parse(filename):
 	for u in users.itervalues():
 		u.calc_stretch()
 
-	#for u in sorted(users.itervalues(), key=lambda x: x.ID):
-		#print u.ID, u.stretch
-		#for c in u.camps:
-			#print '\t',
-			#print c.ID, c.start, c.end, c.utility, c.workload, c.longest_job, c.stretch
-			#print '\t\tavg jobs', len(c.jobs),
-			#if len(c.jobs) == 1:
-				#print c.jobs[0].ID,
-			#print sum(map(lambda x: x.stretch, c.jobs)) / len(c.jobs)
-
 	return {'jobs': jobs,
 		'campaigns': camps,
 		'users': users,
@@ -423,34 +371,29 @@ def run_draw(args):
 
 	if not os.path.exists(out):
 		os.mkdir(out)  # doesn't exist
-	elif os.listdir(out) and not args.override:
-		# not empty and cannot override
-		raise Exception('directory already exists %s' % out)
 
-	simulations = {}
+	simulations = collections.OrderedDict()
 
 	for filename in args.logs:
-		sim = '{0[0]} {0[1]}'.format(
-			os.path.basename(filename).split('-'))
-		#TODO to moze dac taka sama nazwe
-		#sim = filename
-		simulations[sim] = parse(filename)
+		key = os.path.basename(filename)
+		simulations[key] = parse(filename)
 
 	# create selected graphs
 	graphs = [
-		(cdf, "jobs", {}),
-		(cdf, "campaigns", {}),
-		(average, "users", {}),
-		#(job_runtime, "jobs", {}),
-		#(utility, "total", {}),
-		#(diff_heat, "campaigns", {}),
+		(cdf, "jobs", 4),
+		(cdf, "campaigns", 4),
+		(average_per_user, "jobs", 2),
+		(average_per_user, "campaigns", 2),
+		(utility, "total", None),
+		(heatmap, "campaigns", None),
 	]
 
-	for i, (g, key, kwargs) in enumerate(graphs):
+	for i, (g, key, legend) in enumerate(graphs):
 		fig = plt.figure(i, figsize=(16, 9))  # size is in inches
 
-		g(simulations, key, **kwargs)  # add plots
-		plt.legend(loc=4)  # add legend
+		g(simulations, key)  # add plots
+		if legend:
+			plt.legend(loc=legend)  # add legend
 
 		title = '{} {}'.format(key.capitalize(), g.__doc__)
 		plt.title(title, y=1.05, fontsize=20)  # add title
@@ -458,18 +401,11 @@ def run_draw(args):
 		fname = '{}_{}.pdf'.format(key.capitalize(), g.__name__)
 		fig.savefig(os.path.join(out, fname), format='pdf')  # save to file
 
-	if 0:
-		for c in data[0]['campaigns']:
-			if c.stretch >= 20:
-				print c.stretch, c.x_key, len(c.jobs)
-
 
 if __name__=="__main__":
 
 	parser = argparse.ArgumentParser(description='Draw graphs from logs')
 	parser.add_argument('logs', nargs='+', help='List of log files to plot')
 	parser.add_argument('--output', help='Directory to store the plots in')
-	parser.add_argument('--override', action='store_true',
-			    help='Override the output directory')
 
 	run_draw(parser.parse_args())

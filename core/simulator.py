@@ -191,8 +191,8 @@ class GeneralSimulator(object):
 		prev_event = self._block[0].submit
 		self._diag.prev_util['time'] = prev_event
 
-		visual_update = 60 * 15  # notify the user about the progress
-		next_visual = prev_event + visual_update
+		visual_update = 60 * 10  # notify the user about the progress
+		next_visual = time.time() + visual_update
 
 		while sub_iter < sub_total or not self._pq.empty():
 			# We only need to keep two `new_job` events in the
@@ -299,10 +299,10 @@ class GeneralSimulator(object):
 				self._next_force_decay()
 
 			# progress report
-			if self._now > next_visual:
+			if time.time() > next_visual:
 				next_visual += visual_update
 				comp = float(sub_iter + end_iter) / (2 * sub_total)
-				msg = 'Block {:2} scheduler {}: {} completed {:.4f}%'
+				msg = 'Block {:2} scheduler {}: {} completed {:.2f}%'
 				print msg.format(self._block.number, self._parts.scheduler,
 						 time.strftime('%H:%M:%S'), comp * 100)
 

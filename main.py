@@ -332,7 +332,7 @@ def run(workload, args):
 	multi_sched = len(args['schedulers']) > 1
 	multi_blocks = args['block_time'] and not args['one_block']
 
-	run_async = multi_sched or multi_blocks
+	run_async = not PROFILE_FLAG and (multi_sched or multi_blocks)
 
 	if run_async:
 		# Prepare the worker pool. Leave one CPU free,
@@ -415,11 +415,11 @@ def run(workload, args):
 				r = simulate_block(*params)
 				results[sched].append(r)
 
+	# wait for the asynchronous results
 	if run_async:
-		# wait for the asynchronous results
 		for sched_results in results.itervalues():
 			for sim_result in sched_results:
-				# ctr-c doesn't seem to work without timeout
+				# ctr-c doesn't seem to work without a timeout
 				sim_result.wait(60*60*24*365)
 
 	for sched, sched_results in results.iteritems():
@@ -445,7 +445,7 @@ def run(workload, args):
 			logging.info(m.format(blocks[i], sched, sim_conf.cpu_percent))
 
 			if run_async:
-				r, diag = sim_result.get(10)
+				r, diag = sim_result.get(5)
 			else:
 				r, diag = sim_result
 
@@ -458,12 +458,14 @@ def run(workload, args):
 
 		logging.info('Results saved to file %s' % filename)
 		print '-' * 50
+
 	logging.info('Simulation completed. Total run time %.2f'
 		     % (time.time() - global_start))
 	print '-' * 50
 
-	my_pool.close()
-	my_pool.join()
+	if run_async:
+		my_pool.close()
+		my_pool.join()
 
 
 ##
