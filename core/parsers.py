@@ -2,6 +2,8 @@
 import logging
 import os
 import sys
+import time
+from datetime import timedelta
 from abc import ABCMeta, abstractmethod
 from entities import Job, User
 
@@ -53,6 +55,8 @@ class BaseParser(object):
 
 		f = open(filename)
 		for i, line in enumerate(f):
+			if not line.strip():
+				continue
 			if not self._accept(line, i):
 				continue
 
@@ -208,7 +212,46 @@ class ICMParser(BaseParser):
 	Parser for the ICM workload dump.
 	"""
 
-	fields = {} #TODO
+	fields = {
+		'job_id': 0,
+		'user_id': 2,
+		'submit': 4,
+		'run_time': 7,
+		'time_limit': 8,
+		'proc': 11
+	}
 
 	def _accept(self, line, num):
-		return True
+		if len(line.split('|')) > 20:
+			return True
+		return False
+
+	def _from_time_str(self, time_str):
+		return time.mktime(time.strptime(time_str, '%Y-%m-%dT%H:%M:%S'))
+
+	def _from_delta_str(self, delta_str):
+		if '-' in delta_str:
+			days, rest = delta_str.split('-')
+			days = int(days)
+		else:
+			rest = delta_str
+			days = 0
+		t = map(int, rest.split(':'))
+		delta = timedelta(days=days, hours=t[0], minutes=t[1], seconds=t[2])
+		return delta.total_seconds()
+
+	def _parse(self, line, users={}):
+		stats = line.split('|')
+		stats = {name: stats[field]
+			for name, field in self.fields.iteritems()}
+
+		if stats['user_id'] not in users:
+			users[stats['user_id']] = len(users) + 1
+		stats['user_id'] = users[stats['user_id']]
+		stats['submit'] = self._from_time_str(stats['submit'])
+		stats['run_time'] = self._from_delta_str(stats['run_time'])
+		stats['time_limit'] = self._from_delta_str(stats['time_limit'])
+
+		for name in stats:
+			stats[name] = int(stats[name])
+		return stats

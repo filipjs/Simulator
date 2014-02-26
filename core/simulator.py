@@ -562,7 +562,6 @@ class GeneralSimulator(object):
 
 		Return if the `_update_camp_estimates` call is needed.
 		"""
-		assert not camp.time_left, 'campaign still active'
 		user = camp.user
 
 		if not user.active_camps or camp != user.active_camps[0]:
