@@ -83,7 +83,7 @@ class FromWorkloadSubmitter(BaseSubmitter):
 	"""
 
 	def _get_limit(self, job):
-		return job.time_limit
+		return max(job.run_time, job.time_limit)
 
 
 class DefaultTimeSubmitter(BaseSubmitter):
