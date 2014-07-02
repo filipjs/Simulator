@@ -92,3 +92,27 @@ class NaiveEstimator(BaseEstimator):
 		Raise an exception since this shouldn't be called.
 		"""
 		raise Exception('job exceeded its time limit')
+
+
+class PreviousN(BaseEstimator):
+        """
+        Computes the estimation as an average from N last completed jobs
+
+        (implements "Backfilling Using System-Generated Predictions Rather
+        than User Runtime Estimates", Tsafrir, D.; Etsion, Y.;
+        Feitelson, D.G., http://dx.doi.org/10.1109/TPDS.2007.70606 )
+        """
+
+        "number of last completed jobs to calculate statistics from"
+        stat_completed = 2
+
+        def _get_initial(self, job):
+                if len(job.user.completed_jobs) >= PreviousN.stat_completed:
+                        last_runtimes = [job.run_time for job in job.user.completed_jobs[-PreviousN.stat_completed:]]
+                        average = sum(last_runtimes) / len(last_runtimes)
+                        return int(average)
+                else:
+                        return job.time_limit
+
+        def _get_next(self, job, prev_est):
+                return job.time_limit
