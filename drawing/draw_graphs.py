@@ -11,6 +11,8 @@ import sys
 
 
 class Job(object):
+	short_len = 10
+
 	def __init__(self, *args):
 		self.ID = args[0]
 		self.camp = args[1]
@@ -26,7 +28,8 @@ class Job(object):
 		self.wait_time = self.start - self.submit
 
 	def calc_stretch(self):
-		v = float(self.run_time + self.wait_time) / self.run_time
+		v = float(self.run_time + self.wait_time) / max(Job.short_len, self.run_time)
+		v = max(1, v)
 		self.stretch = round(v, 2)
 
 	def __repr__(self):
@@ -34,6 +37,8 @@ class Job(object):
 
 
 class Campaign(object):
+	short_len = 10
+
 	def __init__(self, *args):
 		self.ID = args[0]
 		self.user = args[1]
@@ -55,8 +60,10 @@ class Campaign(object):
 		avg = float(self.workload) / self._system_proc
 		longest_job = max(map(lambda j: j.run_time, self.jobs))
 		lower_bound = max(avg, longest_job)
+		lower_bound = max(Campaign.short_len, lower_bound)
 		length = float(self.end - self.start)
 		self.stretch = round(length / lower_bound, 2)
+		self.stretch = max(1, self.stretch)
 
 	def __repr__(self):
 		return '{} {} {}'.format(len(self.jobs), self.workload, self.stretch)
@@ -158,7 +165,7 @@ def heatmap(simulations, key):
 	heat = []
 	for i, j in v:
 		j = sorted(j.items(), key=lambda x: x[0])  # sort by stretch
-		heat.extend(map(lambda x: x[1], j))  # add values
+		heat.extend(map(lambda x: x[1], j))	 # add values
 
 	heat = np.array(heat)
 	heat.shape = (10, (max_y - 1) * 10)
@@ -391,15 +398,15 @@ def run_draw(args):
 	for i, (g, key, legend) in enumerate(graphs):
 		fig = plt.figure(i, figsize=(16, 9))  # size is in inches
 
-		g(simulations, key)  # add plots
+		g(simulations, key)	 # add plots
 		if legend:
-			plt.legend(loc=legend)  # add legend
+			plt.legend(loc=legend)	# add legend
 
 		title = '{} {}'.format(key.capitalize(), g.__doc__)
 		plt.title(title, y=1.05, fontsize=20)  # add title
 
 		fname = '{}_{}.pdf'.format(key.capitalize(), g.__name__)
-		fig.savefig(os.path.join(out, fname), format='pdf')  # save to file
+		fig.savefig(os.path.join(out, fname), format='pdf')	 # save to file
 
 
 if __name__=="__main__":
