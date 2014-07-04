@@ -40,7 +40,7 @@ class BaseSelector(object):
 			assert job.camp is None, \
 			    'job already in some campaign'
 			assert job not in camp.active_jobs, \
-			    'job already in the campaign'
+			    'job already in this campaign'
 			assert camp in job.user.active_camps, \
 			    'not an active campaign'
 		return camp

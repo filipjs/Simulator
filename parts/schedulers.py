@@ -59,8 +59,8 @@ class BaseScheduler(object):
 	def job_priority_key(self, job):
 		"""
 		``Key`` function for the ``list.sort`` method.
-		Extract a comparison key from the job for the
-		scheduler waiting list sort.
+		Create a comparison key from the job for the
+		scheduler to use in sorting pending jobs.
 
 		Note:
 		  Lower value corresponds to a **HIGHER** priority.
@@ -73,7 +73,7 @@ class BaseScheduler(object):
 
 class OStrich(BaseScheduler):
 	"""
-	Default implementation of the OStrich algorithm.
+	Implementation of the OStrich algorithm.
 	"""
 
 	only_virtual = True
@@ -91,7 +91,7 @@ class OStrich(BaseScheduler):
 		In case of ties order by earlier submit.
 		"""
 		camp, user = job.camp, job.user
-		end = camp.time_left / user.shares
+		end = camp.time_left / user.shares  # lower value -> higher priority
 		# The `end` should be further multiplied by
 		#   `_stats.active_shares` / `_stats.cpu_used`.
 		# However, that gives the same value for all the jobs
@@ -102,7 +102,9 @@ class OStrich(BaseScheduler):
 
 class Fairshare(BaseScheduler):
 	"""
-	SLURM implementation of the fairshare algorithm.
+	Implementation of the SLURM multifactor plugin.
+
+	Currently only supports the "fairshare" component.
 	"""
 
 	only_real = True
@@ -128,5 +130,6 @@ class Fairshare(BaseScheduler):
 			shares_norm = user.shares  # already normalized
 			fairshare = 2.0 ** -(effective / shares_norm)
 		prio = int(fairshare * 100000)  # higher value -> higher priority
-		# TODO zmienic 100k na settings, dodac setting do 'job size prio'
+		# TODO if needed change the constant to a configuration setting
+		# TODO and add more components to the priority value
 		return (-prio, job.submit, job.ID)

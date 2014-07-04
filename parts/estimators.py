@@ -37,7 +37,8 @@ class BaseEstimator(object):
 		"""
 		est = self._get_initial(job)
 		assert job.estimate is None, 'estimate already set'
-		assert est > 0, 'invalid estimate'
+		assert isinstance(est, int), 'invalid estimate type'
+		assert est > 0, 'invalid initial estimate'
 		return est
 
 	def next_estimate(self, job):
@@ -48,7 +49,8 @@ class BaseEstimator(object):
 		prev = job.estimate
 		est = self._get_next(job, prev)
 		assert job.estimate == prev, 'estimate was changed'
-		assert est > prev, 'invalid estimate'
+		assert isinstance(est, int), 'invalid estimate type'
+		assert est > prev, 'invalid next estimate'
 		return est
 
 	@abstractmethod

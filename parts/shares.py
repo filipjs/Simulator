@@ -36,6 +36,7 @@ class BaseShare(object):
 		"""
 		share = self._get_shares(user)
 		assert user.shares is None, 'share value already set'
+		assert isinstance(share, int), 'invalid share type'
 		assert share > 0, 'invalid share value'
 		return share
 
@@ -62,7 +63,10 @@ class EqualShare(BaseShare):
 class CustomShare(BaseShare):
 	"""
 	Read the share values from a file.
+
 	Uses `_settings.share_file` to read from.
+	Each line should consist of a pair "userID share".
+	Users not specified in the file get a single share.
 	"""
 
 	def __init__(self, *args):
@@ -75,7 +79,6 @@ class CustomShare(BaseShare):
 		with open(self._settings.share_file) as f:
 			for line in f:
 				if line:
-					# line consists of a pair <uid, share>
 					uid, share = map(int, line.split())
 					self._shares[uid] = share
 
