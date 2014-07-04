@@ -379,6 +379,9 @@ def run_draw(args):
 	if not os.path.exists(out):
 		os.mkdir(out)  # doesn't exist
 
+	Job.short_len = args.minlen
+	Campaign.short_len = args.minlen
+
 	simulations = collections.OrderedDict()
 
 	for filename in args.logs:
@@ -414,5 +417,6 @@ if __name__=="__main__":
 	parser = argparse.ArgumentParser(description='Draw graphs from logs')
 	parser.add_argument('logs', nargs='+', help='List of log files to plot')
 	parser.add_argument('--output', help='Directory to store the plots in')
+	parser.add_argument('--minlen', type=int, nargs="?", default=10, help="Round jobs' runtime to at least [10] seconds")
 
 	run_draw(parser.parse_args())
