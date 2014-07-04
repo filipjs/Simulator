@@ -35,7 +35,7 @@ class BaseParser(object):
 	__metaclass__ = ABCMeta
 
 	REQUIRED = ['job_id', 'submit', 'run_time', 'proc', 'user_id']
-	OPTIONAL = ['time_limit', 'nodes', 'pn_cpus']
+	OPTIONAL = ['time_limit']
 
 	def parse_workload(self, filename, serial):
 		"""
@@ -102,7 +102,9 @@ class BaseParser(object):
 		the appropriate values.
 
 		You can override this method in a subclass if parsing
-		the line requires more complex logic.
+		the line requires a more complex logic.
+
+		Returned values **MUST** be integer type.
 		"""
 		values = map(int, line.split())
 		return {name: values[field]
@@ -113,7 +115,8 @@ class BaseParser(object):
 		Do the following:
 		  1) Check if `stats` contain required values.
 		  2) Check if the job has an unique ID.
-		  3) Auto-complete optional data.
+		  3) Fill in missing optional data.
+		  4) Change negative values to zero.
 
 		Raises `InvalidStatsError`.
 		"""
@@ -124,7 +127,6 @@ class BaseParser(object):
 			if name in stats:
 				if name in non_negative and stats[name] < 0:
 					err = name + 'has negative value'
-				stats[name] = max(0, stats[name])
 			else:
 				err = name + 'value is missing'
 
@@ -138,7 +140,11 @@ class BaseParser(object):
 			raise InvalidStatsError(msg)
 
 		for name in self.OPTIONAL:
-			stats[name] = max(0, stats.get(name, 0))
+			stats[name] = stats.get(name, 0)
+			
+		for name in stats:
+			stats[name] = max(0, stats[name])
+
 		return stats
 
 	@abstractmethod
@@ -162,7 +168,7 @@ class DefaultParser(BaseParser):
 	     following the ordering in self.REQUIRED.
 	"""
 
-	def _get_fields(self, line):
+	def _prepare_fields(self, line):
 		if line[0] == '{':
 			# part 1)
 			from ast import literal_eval
@@ -181,7 +187,7 @@ class DefaultParser(BaseParser):
 
 	def _accept(self, line, num):
 		if num == 0:
-			return self._get_fields(line)
+			return self._prepare_fields(line)
 		return True
 
 
@@ -241,6 +247,9 @@ class ICMParser(BaseParser):
 		return delta.total_seconds()
 
 	def _parse(self, line, users={}):
+		"""
+		Custom logic to parse ICM database extract.
+		"""
 		stats = line.split('|')
 		stats = {name: stats[field]
 			for name, field in self.fields.iteritems()}

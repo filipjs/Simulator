@@ -27,8 +27,8 @@ class Job(object):
 	  4) execution ended
 	"""
 
-	__slots__ = ('ID', 'submit', 'run_time', 'proc', 'user', 'time_limit', 'nodes',
-		     'pn_cpus', 'camp', '_start', '_completed', 'estimate', 'alloc')
+	__slots__ = ('ID', 'submit', 'run_time', 'proc', 'user', 'time_limit',
+		     'camp', '_start', '_completed', 'estimate')
 
 	def __init__(self, stats, user):
 		self.ID = stats['job_id']
@@ -37,33 +37,12 @@ class Job(object):
 		self.proc = stats['proc']
 		self.user = user
 		self.time_limit = stats['time_limit']
-		self.nodes = stats['nodes']
-		self.pn_cpus = stats['pn_cpus']
 
 	def reset(self):
 		self.camp = None
 		self._start = None
 		self._completed = False
 		self.estimate = None
-		self.alloc = None
-
-	def validate_configuration(self):
-		"""
-		Check and possibly correct the job nodes configuration.
-		"""
-		if not self.nodes and not self.pn_cpus:
-			# feature turned off, OK
-			return
-		if self.nodes and not self.pn_cpus:
-			self.pn_cpus = int(math.ceil(self.proc / self.nodes))
-		if not self.nodes and self.pn_cpus:
-			self.nodes = int(math.ceil(self.proc / self.pn_cpus))
-		assert self.nodes > 0 and self.pn_cpus > 0, 'invalid configuration'
-		total = self.nodes * self.pn_cpus
-		if total != self.proc:
-			err = 'WARNING: Job {} changing `job.proc` from {} to {}'
-			print err.format(self.ID, self.proc, total)
-			self.proc = total
 
 	@property
 	def start_time(self):
@@ -145,7 +124,7 @@ class Campaign(object):
 
 	@property
 	def time_left(self):
-		# self.virtual is a float and we want an int
+		# self._virtual is a float and we want an int
 		return self.workload - int(self._virtual) + self._offset
 
 	@property
