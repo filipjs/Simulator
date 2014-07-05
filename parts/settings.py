@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import logging
 
 """
 Module gathering the settings from different parts of the system.
@@ -59,6 +60,8 @@ alg_templates = [
 		 loc='DefaultTimeSubmitter'),
 	Template('share_file', 'File with user shares', 'shares.txt',
 		 loc='CustomShare'),
+	Template('last_completed', 'The number of completed jobs to estimate'
+		 ' the time limit from', 2, loc='PreviousNEstimator'),
 	Template('bf_depth', 'The maximum number of jobs to backfill', 50),
 	Template('bf_window', 'The amount of time to look into the future'
 		 ' when considering jobs for backfilling', 24, 'HOURS'),
@@ -106,7 +109,12 @@ class Settings(object):
 		  **kwargs: values read from the command line.
 		"""
 		for temp in templates:
-			value = kwargs[temp.name]
+			if temp.name in kwargs:
+				value = kwargs[temp.name]
+			else:
+				value = temp.default
+				logging.warn('Missing "%s" setting, using the default value'
+				             % temp.name)
 			# change the time if applicable
 			if temp.time_unit is not None:
 				assert temp.time_unit in time_units, 'invalid time unit'
