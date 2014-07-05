@@ -17,8 +17,8 @@ class _NodeSpace(object):
 	def __init__(self, begin, end, avail, reserved, next, job_ends):
 		self.begin = begin
 		self.end = end
-		self.avail = avail  # node map
-		self.reserved = reserved  # node map
+		self.avail = avail
+		self.reserved = reserved
 		self.next = next
 		self.job_ends = job_ends
 		self.rsrv_starts = 0
@@ -39,23 +39,22 @@ class BaseManager(object):
 
 	"""
 
-	__metaclass__ = ABCMeta
+	#__metaclass__ = ABCMeta
+	#TODO STWORZYC META DLA TEJ KLASY?? (wtedy mozna inna strategie)
+	#TODO I DOPISAC ZE JESLI SIE CHCE NODY TO TRZEBA PROBOWAC REIMPLEMENTOWAC KOD Z #TAGGED "LAST NODE SUPPORT"
 
-	def __init__(self, nodes, settings):
+	def __init__(self, cpus, settings):
 		self._settings = settings
 		self._space_list = _NodeSpace(
 					0,
 					float('inf'),
-					self._node_map(nodes),
-					self._node_map(),
+					cpus,
+					0,
 					None,
 					0,
 				   )
 		self._reservations = 0
-		# configuration
-		self._node_count = len(nodes)
-		self._max_cpu_per_node = nodes[0]
-		self._cpu_limit = sum(nodes.itervalues())
+		self._cpu_limit = cpus
 		self._debug = logging.getLogger().isEnabledFor(logging.DEBUG)
 
 	def _dump_space(self, intro, *args):
@@ -68,48 +67,13 @@ class BaseManager(object):
 			logging.debug('%s', it)
 			it = it.next
 
-	def sanity_test(self, job):
-		"""
-		Return if the job is ever runnable in the current configuration.
-		"""
-		ret = True
-		ret &= (job.nodes <= self._node_count)
-		ret &= (job.pn_cpus <= self._max_cpu_per_node)
-		ret &= (job.proc <= self._cpu_limit)
-		return ret
-
-	@abstractmethod
-	def _node_map(self, nodes=None):
-		"""
-		Return the constructor for the `_BaseNodeMap` subclass
-		this manager uses.
-		"""
-		raise NotImplemented
-
-	@abstractmethod
-	def _check_nodes(self, avail, job):
-		"""
-		Return if the job is runnable on `avail` nodes.
-		"""
-		raise NotImplemented
-
-	@abstractmethod
-	def _assign_resources(self, avail, job, reservation):
-		"""
-		Return a new node map with the best node selection
-		for the job. Must be a subset of the `avail` map.
-
-		Args:
-		  avail: map of available nodes to use.
-		  job: the job in question.
-		  reservation: is this a reservation flag.
-
-		"""
-		raise NotImplemented
-
 	def start_session(self, now):
 		"""
 		Prepare the manager for the upcoming scheduling or backfilling pass.
+		
+		Args:
+		  now: session start time
+
 		"""
 		self._window = now + self._settings.bf_window
 		self._space_list.begin = now
@@ -117,7 +81,7 @@ class BaseManager(object):
 		assert self._space_list.length > 0, 'some finished jobs not removed'
 		assert not self._reservations, 'reservations not removed'
 
-	def _allocate_resources(self, job, first, last, avail, reservation):
+	def _allocate_resources(self, job, first, last, reservation):
 		"""
 		Allocate resources to the job and update the space list.
 
@@ -125,21 +89,19 @@ class BaseManager(object):
 		  job: job in question.
 		  first: starting space for the job.
 		  last: last space for the job.
-		  avail: node map with available nodes for the job.
 		  reservation: is this a reservation flag.
 
 		"""
-		assert self._check_nodes(avail, job), 'invalid avail map'
 		# The job spans the spaces from `first` to `last` (inclusive).
-		# However might we have to split the last one.
+		# However we might have to split the last one.
 		if (last.end - first.begin) > job.time_limit:
 			# Divide the `last` space appropriately and
-			# create a new space to occupy the hole.
+			# create a new space to occupy the gap.
 			new_space = _NodeSpace(
 					first.begin + job.time_limit,
 					last.end,
-					self.copy(last.avail),
-					self.copy(last.reserved),
+					last.avail,
+					last.reserved,
 					last.next,
 					last.job_ends,
 				    )
@@ -149,23 +111,18 @@ class BaseManager(object):
 			last.job_ends = 0
 			last.update()
 
-		# get the resources from the `avail` node map
-		res = self._assign_resources(avail, job, reservation)
-		assert self._check_nodes(res, job), 'invalid resource map'
-
 		if not reservation:
-			job.alloc = res
 			last.job_ends += 1
 		else:
-			self._reservations += 1
 			first.rsrv_starts += 1
+			self._reservations += 1
 
 		# remove the used up resources
 		it = first
 		while True:
-			it.avail = self.remove(it.avail, res)
+			it.avail -= job.proc
 			if reservation:
-				it.reserved = self.add(it.reserved, res)
+				it.reserved += job.proc
 			if it == last:
 				break
 			it = it.next
@@ -175,15 +132,16 @@ class BaseManager(object):
 
 	def try_schedule(self, job):
 		"""
+		TODO
 		"""
 		assert not self._reservations, 'reservations are present'
-		# In a space list without reservations, spaces are
+		# In a space list without reservations, each space is
 		# guaranteed to have more resources available than
 		# the spaces before them.
 		# This means we only have to check the first one
 		# to see if the job can be executed.
 		first = self._space_list
-		if not self._check_nodes(first.avail, job):
+		if job.proc > first.avail:
 			return False
 
 		total_time = 0
@@ -196,46 +154,38 @@ class BaseManager(object):
 				break
 			it = it.next
 
-		self._allocate_resources(job, first, last, first.avail, False)
+		self._allocate_resources(job, first, last, False)
 		return True
 
 	def try_backfill(self, job):
 		"""
+		TODO
 		Make a reservation for the job.
 		Return if the job can be executed immediately.
 		"""
 		total_time = 0
 		it = first = self._space_list
-		avail = None
-		must_check = True
 
-		cop = self.copy
-		inter = self.intersect
-		check_j = self._check_nodes
+		avail = it.avail
+		must_check = True
 
 		while True:
 			if must_check:
-				if avail is None:
-					avail = cop(it.avail)
-					#avail = self.copy(it.avail)
-				else:
-					avail = inter(avail, it.avail)
-					#avail = self.intersect(avail, it.avail)
+				avail = min(avail, it.avail)
 
-			if not must_check or check_j(avail, job):
-			#if not must_check or self._check_nodes(avail, job):
+			if not must_check or job.proc <= avail:
 				total_time += it.length
 				if total_time >= job.time_limit:
 					last = it
 					break
-				# next space #TODO OPIS
+				# next space #TODO OPIS (dlaczego tak sie sprawdza must_check??)
 				it = it.next
 				must_check = it.rsrv_starts > 0
 			else:
 				total_time = 0
 				#TODO OPIS
 				it = first = first.next
-				avail = None
+				avail = it.avail
 				must_check = True
 				# Maybe we can stop, if the potential start is already
 				# outside of the backfilling window.
@@ -245,11 +195,12 @@ class BaseManager(object):
 		# check if the job can be executed now
 		can_run = (first == self._space_list)
 
-		self._allocate_resources(job, first, last, avail, not can_run)
+		self._allocate_resources(job, first, last, not can_run)
 		return can_run
 
 	def end_session(self):
 		"""
+		#TODO
 		Clear the created reservations.
 		"""
 		before = self._reservations
@@ -265,11 +216,13 @@ class BaseManager(object):
 				remove, it = it, it.next
 				it.begin = remove.begin
 				it.update()
+				#TODO DODAC JAKIES ASSERTY??
+				#TODO WYGLADA NA TO ZE REMOVE.AVAIL + REMOVE.RESERVED == IT.AVAIL??
 				prev.next = it
 				remove.next = None
 			else:
-				it.avail = self.add(it.avail, it.reserved)
-				it.reserved = self.clear()
+				it.avail += it.reserved
+				it.reserved = 0
 				prev, it = it, it.next
 
 		assert not self._reservations, 'reservations not cleared'
@@ -278,19 +231,21 @@ class BaseManager(object):
 
 	def job_ended(self, job):
 		"""
+		#TODO
 		Free the resources taken by the job.
 		"""
 		assert not self._reservations, 'reservations are present'
 		self._space_list.begin = job.end_time
 		self._space_list.update()
 		assert self._space_list.length >= 0, 'some finished jobs not removed'
-		assert job.alloc is not None, 'missing job resources'
+		#assert job.alloc is not None, 'missing job resources'
+		#TODO TEN ASSERT TERAZ POWINIEN SPRAWDZAC CZY PRACA JEST JUZ FINISHED (STARTED?)
 
 		last_space_end = job.start_time + job.time_limit
 		it = self._space_list
 
 		while it.end < last_space_end:
-			it.avail = self.add(it.avail, job.alloc)
+			it.avail += job.proc
 			it = it.next
 
 		assert it.end == last_space_end, 'missing job last space'
@@ -301,88 +256,16 @@ class BaseManager(object):
 			remove = it.next
 			it.end = remove.end
 			it.avail = remove.avail
-			it.reserved = remove.reserved
+			#TODO TUTAJ TEZ ASSERT TYPE IT.AVAIL + JOB>PROC == REMOVE.AVAIL??
+			it.reserved = remove.reserved #TODO ASSERT RESERVVED == 0??
 			it.job_ends = remove.job_ends
 			it.update()
 			# move 'pointers' as the last step
 			it.next = remove.next
 			remove.next = None
 		else:
-			it.avail = self.add(it.avail, job.alloc)
+			it.avail += job.proc
 			it.job_ends -= 1
-		# finally clear
-		job.alloc = None
+
 		if self._debug:
 			self._dump_space('Removed resources %s', job)
-
-	@abstractmethod
-	def intersect(self, x, y):
-		"""
-		"""
-		raise NotImplemented
-
-	@abstractmethod
-	def add(self, x, y):
-		"""
-		"""
-		raise NotImplemented
-
-	@abstractmethod
-	def remove(self, x, y):
-		"""
-		"""
-		raise NotImplemented
-
-	@abstractmethod
-	def clear(self):
-		"""
-		"""
-		raise NotImplemented
-
-	@abstractmethod
-	def size(self, x):
-		"""
-		"""
-		raise NotImplemented
-
-	@abstractmethod
-	def copy(self, x):
-		"""
-		"""
-		raise NotImplemented
-
-
-class SingletonManager(BaseManager):
-	"""
-	"""
-
-	def _node_map(self, nodes=None):
-		if nodes:
-			return nodes[0]
-		else:
-			return 0
-
-	def _check_nodes(self, avail, job):
-		return job.proc <= avail
-
-	def _assign_resources(self, avail, job, reservation):
-		assert job.proc <= avail, 'insufficient resources'
-		return self._node_map({0:job.proc})
-
-	def intersect(self, x, y):
-		return min(x, y)
-
-	def add(self, x, y):
-		return x + y
-
-	def remove(self, x, y):
-		return x - y
-
-	def clear(self):
-		return 0
-
-	def size(self, x):
-		return x
-
-	def copy(self, x):
-		return x
