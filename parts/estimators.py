@@ -96,25 +96,39 @@ class NaiveEstimator(BaseEstimator):
 		raise Exception('job exceeded its time limit')
 
 
-class PreviousN(BaseEstimator):
+class PreviousNEstimator(BaseEstimator):
         """
-        Computes the estimation as an average from N last completed jobs
+	Computes the estimation as an average from N last completed jobs.
 
-        (implements "Backfilling Using System-Generated Predictions Rather
-        than User Runtime Estimates", Tsafrir, D.; Etsion, Y.;
-        Feitelson, D.G., http://dx.doi.org/10.1109/TPDS.2007.70606 )
-        """
+	Uses `_settings.last_completed` as N.
 
-        "number of last completed jobs to calculate statistics from"
-        stat_completed = 2
+	(Implementation from "Backfilling Using System-Generated Predictions Rather
+	than User Runtime Estimates", Tsafrir, D.; Etsion, Y.;
+	Feitelson, D.G., http://dx.doi.org/10.1109/TPDS.2007.70606)
+	"""
 
-        def _get_initial(self, job):
-                if len(job.user.completed_jobs) >= PreviousN.stat_completed:
-                        last_runtimes = [job.run_time for job in job.user.completed_jobs[-PreviousN.stat_completed:]]
-                        average = sum(last_runtimes) / len(last_runtimes)
-                        return int(average)
-                else:
-                        return job.time_limit
+	def __init__(self, *args):
+		"""
+		Check the correctness of N.
+		"""
+		BaseEstimator.__init__(self, *args)
+		assert self._settings.last_completed > 0, 'invalid last completed'
 
-        def _get_next(self, job, prev_est):
-                return job.time_limit
+	def _get_initial(self, job):
+		"""
+		Set the time limit to the average of the last N jobs.
+		"""
+		N = self._settings.last_completed
+
+		if len(job.user.completed_jobs) >= N:
+			last_runtimes = [ j.run_time for j in job.user.completed_jobs[-N:] ]
+			assert len(last_runtimes) == N, 'missing jobs'
+			return sum(last_runtimes) / N
+		else:
+			return job.time_limit
+
+	def _get_next(self, job, prev_est):
+		"""
+		Return the worst case, don't try to guess again.
+		"""
+		return job.time_limit
