@@ -121,6 +121,12 @@ class Fairshare(BaseScheduler):
 		  shares_norm = my share / total shares
 
 		The priority then is multiplied by some weight (usually around 10k-100k).
+
+		Note:
+		  Starting from SLURM 14.xx there is also a FairShareDampeningFactor
+		  which if needed could be implemented here.
+		  The new formula is as follows:
+		    pow(2.0, -((usage_efctv / shares_norm) / damp_factor))
 		"""
 		if not self._stats.total_usage:
 			fairshare = 1

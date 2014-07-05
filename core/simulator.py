@@ -104,25 +104,18 @@ class GeneralSimulator(object):
 		Args:
 		  block: a `Block` instance with the submitted `Jobs`.
 		  users: a dictionary of `Users`.
-		  nodes: the configuration of nodes in the cluster.
 		  settings: algorithmic settings
 		  parts: *instances* of all the system parts
 		"""
 		assert block and users, 'invalid arguments'
 		self._block = block
-		self._waiting_jobs = []
+		self._core_period = block.core_period
+		self._cpu_limit = block.cpus
 		self._users = users
 		self._settings = settings
 		self._parts = parts
-		self._core_period = (block.core_start, block.core_end)
-		self._cpu_limit = block.cpus
 		# create an appropriate cluster manager
-		if len(block.nodes) == 1:
-			self._manager = cluster_managers.SingletonManager(
-						block.nodes, settings)
-		else:
-			self._manager = cluster_managers.SlurmManager(
-						block.nodes, settings)
+		self._manager = cluster_managers.SingletonManager(settings)
 
 	def _initialize(self):
 		"""
@@ -143,6 +136,7 @@ class GeneralSimulator(object):
 		self._diag.avg_util = {'period': 0, 'sum': 0.0}
 		self._diag.sim_time = time.time()
 
+		self._waiting_jobs = []
 		self._results = []
 		self._pq = PriorityQueue()
 		self._compressor = zlib.compressobj()
@@ -169,12 +163,16 @@ class GeneralSimulator(object):
 		Return a list of encountered events.
 		"""
 
+		# Magic value taken from slurm/multifactor plugin.
+		self._decay_factor = 1 - (0.693 / self._settings.decay)
 		# Note:
 		#   The CPU usage decay is always applied after each event.
 		#   There is also a dummy `force_decay` event inserted into
 		#   the queue to force the calculations in case the gap
 		#   between consecutive events would be too long.
-		self._decay_factor = 1 - (0.693 / self._settings.decay)
+		#TODO ZAMIENIC APPLY DECAY NA BACKGROUND THREAD TAK SAMO JAK BACKFILLING?!?!?!
+		#TODO WTEDY BEDZIE TRZEBA TRZYMAC "TEMPORARY" USAGE GDZIES ODDZIELNIE I GO DODAWAC
+		#TODO DO GLOWNEGO DOPIERO PRZY URUCHOMIENIU TEGO "THREADA"
 		self._force_period = 60 * 5
 
 		self._initialize()
@@ -192,6 +190,7 @@ class GeneralSimulator(object):
 		self._diag.prev_util['time'] = prev_event
 
 		visual_update = 60 * 10  # notify the user about the progress
+		#TODO DODAC POZA CZASEM TEZ PROCENTOWO CO 25%
 		next_visual = time.time() + visual_update
 
 		while sub_iter < sub_total or not self._pq.empty():
@@ -308,7 +307,7 @@ class GeneralSimulator(object):
 
 		self._finalize()
 		# Results for each user should be in this order:
-		#  1) job ends
+		#  1) job ends (this is done during simulation)
 		#  2) camp ends
 		#  3) user stats
 		for u in self._users.itervalues():

@@ -51,15 +51,11 @@ class Block(object):
 		self.margin_count = len(self._jobs) - self.core_count
 
 		self.number = num
-		self.cpus = None
 
 	@property
-	def core_start(self):
-		return self._first_core.submit
-
-	@property
-	def core_end(self):
-		return self._first_core.submit + self._block_time
+	def core_period(self):
+		return (self._first_core.submit,
+			self._first_core.submit + self._block_time)
 
 	def __len__(self):
 		return len(self._jobs)
@@ -261,10 +257,8 @@ def simulate_block(block, sched, alg_conf, part_conf):
 
 	# extract the users and reset all instances
 	users = {}
-	time_zero = block[0].submit
 
 	for j in block:
-		j.submit -= time_zero
 		j.reset()
 		users[j.user.ID] = j.user
 	for u in users.itervalues():
@@ -286,8 +280,8 @@ def simulate_block(block, sched, alg_conf, part_conf):
 	if not PROFILE_FLAG:
 		r = my_sim.run()
 		# restore original values
+		#TODO TO POWINNO BYC JEDNAK USELESS SKORO JEST WSZYSTKO KOPIOWANE!!
 		for j in block:
-			j.submit += time_zero
 			j.reset()
 		for u in users.itervalues():
 			u.reset()
