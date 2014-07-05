@@ -89,8 +89,6 @@ sim_templates = [
 	Template('serial', 'Serialize jobs to use at most `serial` number of CPUs', 0),
 	Template('cpu_count', 'Set a static number of CPUs, takes precedence', 0),
 	Template('cpu_percent', 'Set the number of CPUs to the P-th percentile', 70),
-	Template('cpu_per_node', 'Divide the cluster into nodes with'
-		 'said number of CPUs', 0),
 	Template('output', 'Directory to store the results in', 'sim_results'),
 ]
 
