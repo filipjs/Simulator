@@ -104,9 +104,17 @@ class BaseParser(object):
 		You can override this method in a subclass if parsing
 		the line requires more complex logic.
 		"""
-		values = map(int, line.split())
-		return {name: values[field]
-			for name, field in self.fields.iteritems()}
+		try:
+			values = map(int, line.split())
+		except ValueError:
+			# PIK-IPLEX trace uses float in field #6
+			values = line.split()
+			for i in range(0, len(values)):
+				if i==5:
+					values[i] = float(values[i])
+				else:
+					values[i] = int(values[i])
+		return {name: values[field] for name, field in self.fields.iteritems() }
 
 	def _validate(self, stats, ids=set()):
 		"""
