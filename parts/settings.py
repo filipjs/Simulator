@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import logging
 
 """
 Module gathering the settings from different parts of the system.
@@ -104,15 +103,10 @@ class Settings(object):
 		"""
 		Args:
 		  templates: a list of `Template` instances.
-		  **kwargs: values read from the command line.
+		  **kwargs: values for the settings.
 		"""
 		for temp in templates:
-			if temp.name in kwargs:
-				value = kwargs[temp.name]
-			else:
-				value = temp.default
-				logging.warn('Missing "%s" setting, using the default value'
-				             % temp.name)
+			value = kwargs[temp.name]
 			# change the time if applicable
 			if temp.time_unit is not None:
 				assert temp.time_unit in time_units, 'invalid time unit'

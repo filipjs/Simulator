@@ -67,6 +67,12 @@ class BaseManager(object):
 			logging.debug('%s', it)
 			it = it.next
 
+	def runnable(self, job):
+		"""
+		TODO
+		"""
+		return job.proc <= self._cpu_limit
+
 	def start_session(self, now):
 		"""
 		Prepare the manager for the upcoming scheduling or backfilling pass.

@@ -115,7 +115,8 @@ class GeneralSimulator(object):
 		self._settings = settings
 		self._parts = parts
 		# create an appropriate cluster manager
-		self._manager = cluster_managers.SingletonManager(settings)
+		self._manager = cluster_managers.BaseManager(
+						block.cpus, settings)
 
 	def _initialize(self):
 		"""
@@ -189,7 +190,7 @@ class GeneralSimulator(object):
 		prev_event = self._block[0].submit
 		self._diag.prev_util['time'] = prev_event
 
-		visual_update = 60 * 10  # notify the user about the progress
+		visual_update = 60  # notify the user about the progress
 		#TODO DODAC POZA CZASEM TEZ PROCENTOWO CO 25%
 		next_visual = time.time() + visual_update
 
@@ -224,7 +225,7 @@ class GeneralSimulator(object):
 
 			if event == Events.new_job:
 				# check if the job is runnable
-				if self._manager.sanity_test(entity):
+				if self._manager.runnable(entity):
 					self._new_job_event(entity)
 					schedule = True
 				else:
