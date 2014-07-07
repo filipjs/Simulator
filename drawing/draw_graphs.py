@@ -5,10 +5,11 @@ import collections
 import itertools
 import math
 import matplotlib.pyplot as plt
+import matplotlib
 import numpy as np
 import os
 import sys
-
+import logging
 
 class Job(object):
 	def __init__(self, *args):
@@ -86,10 +87,24 @@ class User(object):
 		return '{} {}'.format(self.camps, self.stretch)
 
 
-def _get_color(i):
-	c = ['r', 'g', 'b', 'c', 'm', 'y', 'k']
-	#c = ['r', '0.0', '0.4']
-	return c[i]
+def _get_linestyle_color(i):
+	colors = ['r', 'g', 'b', 'c', 'm', 'y', 'k']
+	linestyles = ['-']
+	linewidths = [1, 1, 2]
+	return { 'color' : colors[i % len(colors)], 'linestyle' : linestyles[i % len(linestyles)], 'linewidth' : linewidths[i % len(linewidths)] }
+
+
+def _get_linestyle_bw(i):
+	colors = ['0.0', '0.3', '0.6']
+	linestyles = [':', '--', '-', ]
+	linewidths = [1, 1, 2]
+	return { 'color' : colors[i % len(colors)], 'linestyle' : linestyles[i % len(linestyles)], 'linewidth' : linewidths[i % len(linewidths)] }
+
+heatmap_palette_bw = plt.cm.Greys
+heatmap_palette_color = plt.cm.RdYlGn
+
+heatmap_palette = heatmap_palette_color
+_get_linestyle = _get_linestyle_color
 
 
 def cdf(simulations, key):
@@ -99,8 +114,8 @@ def cdf(simulations, key):
 	plt.ylabel('fraction of ' + key)
 
 	plt.xscale('log', subsx=[])
-	plt.axis([1, 300, 0.25, 1])
-	plt.xticks([1, 10, 100], [1, 10, 100])
+	# plt.axis([1, 50, 0, 1])
+	plt.xticks([1, 2, 3, 5, 10, 20, 50, 100, 200, 500], [1, 2, 3, 5, 10, 20, 50, 100, 200, 500])
 
 	for i, (sim, data) in enumerate(simulations.iteritems()):
 		values = {}
@@ -117,20 +132,25 @@ def cdf(simulations, key):
 			act += count
 			x.append(stretch)
 			y.append(act/total)
+		style = _get_linestyle(i)
+		plt.plot(x, y, label=sim, **style)
 
-		plt.plot(x, y, color=_get_color(i), label=sim)
+
+def choose2(simulations):
+	keys = simulations.keys()
+	logging.warn("using 2 simulations: %s, %s " % (keys[0], keys[-1]))
+	orgsim = simulations
+	simulations = collections.OrderedDict()
+	simulations[keys[0]] = orgsim[keys[0]]
+	simulations[keys[-1]] = orgsim[keys[-1]]
+	return simulations
 
 
-def heatmap(simulations, key):
-	""" Heatmap """
-
+def heatmap(simulations, key, colorbar_range = 100):
 	if len(simulations) > 2:
-		print 'Heatmap only from a maximum of two plots'
-		return
+		simulations = choose2(simulations)
 
-	colorbar_range = 300
 	max_y = 10
-
 	v = {}
 	for i in range(11, 20+1): # utility incremented by 0.05
 		ut = (i*5) / 100.
@@ -138,7 +158,6 @@ def heatmap(simulations, key):
 		v[ut] = {j/10.:0 for j in range(10, max_y * 10)}
 
 	for i, (sim, data) in enumerate(simulations.iteritems()):
-
 		if i == 0:
 			m = +1
 		else:
@@ -163,8 +182,7 @@ def heatmap(simulations, key):
 	heat = np.array(heat)
 	heat.shape = (10, (max_y - 1) * 10)
 
-	#plt.pcolor(heat.T, label='b', cmap=plt.cm.hot_r)
-	plt.pcolor(heat.T, label='b', cmap='RdBu',
+	plt.pcolor(heat.T, label='b', cmap=heatmap_palette,
 		   vmin=-colorbar_range, vmax=colorbar_range)
 	plt.colorbar(shrink=0.7)
 
@@ -175,13 +193,16 @@ def heatmap(simulations, key):
 	y_ax = np.arange(0, max_y * 10, 10)
 	plt.yticks(y_ax, map(str, y_ax/10. + 1)[:-1] + [str(max_y) + " or more"])
 	plt.ylabel('campaign stretch')
+	plt.text(10.5, 80.0, "\n".join(simulations.keys()[0].split()))
+	plt.text(10.5, 5.0, "\n".join(simulations.keys()[1].split()))
+	plt.text(12, 80, "difference in the number of campaigns", rotation=270)
 
 
 def average_per_user(simulations, key):
 	""" Average Stretch per User """
 
-	plt.xlabel('users')
-	plt.ylabel(key + ' stretch')
+	plt.xlabel('user index')
+	plt.ylabel("average "+ key + "' stretch")
 
 	if key == 'jobs':
 		value = 'job_stretch'
@@ -193,17 +214,16 @@ def average_per_user(simulations, key):
 		y = map(lambda u: getattr(u, value), data['users'].itervalues())
 		y.sort()
 		x = range(len(y))
-
-		plt.plot(x, y, color=_get_color(i), label=sim)
-	plt.axis([0, len(y), 0, 100])
+		style = _get_linestyle(i)
+		plt.plot(x, y, label=sim, **style)
+	# plt.axis([0, len(y), 0, 100])
 
 
 def utility(simulations, key):
 	""" Utilization """
 
 	if len(simulations) > 2:
-		print 'Utility graph only from a maximum of two plots'
-		return
+		simulations = choose2(simulations)
 
 	def timeline(ut, step):
 		padded = itertools.chain(ut, [(step-1, 0)])
@@ -363,6 +383,7 @@ def parse(filename):
 
 
 def run_draw(args):
+	global _get_linestyle, heatmap_palette
 
 	if args.output is None:
 		out = args.logs[0].split('-')[0]
@@ -372,16 +393,34 @@ def run_draw(args):
 	if not os.path.exists(out):
 		os.mkdir(out)  # doesn't exist
 
+	if args.bw:
+		_get_linestyle = _get_linestyle_bw
+		matplotlib.rcParams['font.family'] = 'serif'
+		matplotlib.rcParams['font.serif'] = ['Computer Modern Roman']
+		matplotlib.rcParams['text.usetex'] = True
+		heatmap_palette = heatmap_palette_bw
+	else:
+		_get_linestyle = _get_linestyle_color
+
+	Job.short_len = args.minlen
+	Campaign.short_len = args.minlen
+
 	simulations = collections.OrderedDict()
 
 	for filename in args.logs:
 		key = os.path.basename(filename)
+		if args.striplegend:
+			fields = key.split('-')
+			if fields[-3] == "OStrich":
+				key = fields[1] + " " + fields[-3]
+			else:
+				key = fields[-3]
 		simulations[key] = parse(filename)
 
 	# create selected graphs
 	graphs = [
-		(cdf, "jobs", 4),
-		(cdf, "campaigns", 4),
+		(cdf, "jobs", 4, ),
+		(cdf, "campaigns", 4, ),
 		(average_per_user, "jobs", 2),
 		(average_per_user, "campaigns", 2),
 		(utility, "total", None),
@@ -389,23 +428,27 @@ def run_draw(args):
 	]
 
 	for i, (g, key, legend) in enumerate(graphs):
-		fig = plt.figure(i, figsize=(16, 9))  # size is in inches
-
-		g(simulations, key)  # add plots
+		fig = plt.figure(i, figsize=(8, 4.5))  # size is in inches
+		fig.patch.set_facecolor('white')
+		g(simulations, key)	 # add plots
 		if legend:
-			plt.legend(loc=legend)  # add legend
+			plt.legend(loc=legend, frameon=False)
 
-		title = '{} {}'.format(key.capitalize(), g.__doc__)
-		plt.title(title, y=1.05, fontsize=20)  # add title
+		# don't plot title: it's in the filename and will be in figure description
+		# title = '{} {}'.format(key.capitalize(), g.__doc__)
+		# plt.title(title, y=1.05, fontsize=20)	 # add title
 
 		fname = '{}_{}.pdf'.format(key.capitalize(), g.__name__)
-		fig.savefig(os.path.join(out, fname), format='pdf')  # save to file
+		fig.tight_layout()
+		fig.savefig(os.path.join(out, fname), format='pdf', facecolor=fig.get_facecolor())
 
 
 if __name__=="__main__":
-
+	logging.basicConfig()
 	parser = argparse.ArgumentParser(description='Draw graphs from logs')
 	parser.add_argument('logs', nargs='+', help='List of log files to plot')
 	parser.add_argument('--output', help='Directory to store the plots in')
-
+	parser.add_argument('--minlen', type=int, nargs="?", default=10, help="Round jobs' runtime to at least [10] seconds")
+	parser.add_argument('--bw', action="store_true", help="black&white color scheme")
+	parser.add_argument('--striplegend', action="store_true", help="pretty-print result name in legend; requires specific formatting of the input files")
 	run_draw(parser.parse_args())
