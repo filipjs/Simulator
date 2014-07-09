@@ -303,8 +303,8 @@ class GeneralSimulator(object):
 				next_visual += visual_update
 				comp = float(sub_iter + end_iter) / (2 * sub_total)
 				msg = 'Block {:2} scheduler {}: {} completed {:.2f}%'
-				print msg.format(self._block.number, self._parts.scheduler,
-						 time.strftime('%H:%M:%S'), comp * 100)
+				logging.info(msg.format(self._block.number, self._parts.scheduler,
+						 time.strftime('%H:%M:%S'), comp * 100))
 
 		self._finalize()
 		# Results for each user should be in this order:
