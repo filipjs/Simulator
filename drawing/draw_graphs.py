@@ -12,6 +12,8 @@ import sys
 import logging
 
 class Job(object):
+	short_len = 10
+
 	def __init__(self, *args):
 		self.ID = args[0]
 		self.camp = args[1]
@@ -27,7 +29,8 @@ class Job(object):
 		self.wait_time = self.start - self.submit
 
 	def calc_stretch(self):
-		v = float(self.run_time + self.wait_time) / self.run_time
+		v = float(self.run_time + self.wait_time) / max(Job.short_len, self.run_time)
+		v = max(1, v)
 		self.stretch = round(v, 2)
 
 	def __repr__(self):
@@ -35,6 +38,8 @@ class Job(object):
 
 
 class Campaign(object):
+	short_len = 10
+
 	def __init__(self, *args):
 		self.ID = args[0]
 		self.user = args[1]
@@ -56,8 +61,10 @@ class Campaign(object):
 		avg = float(self.workload) / self._system_proc
 		longest_job = max(map(lambda j: j.run_time, self.jobs))
 		lower_bound = max(avg, longest_job)
+		lower_bound = max(Campaign.short_len, lower_bound)
 		length = float(self.end - self.start)
 		self.stretch = round(length / lower_bound, 2)
+		self.stretch = max(1, self.stretch)
 
 	def __repr__(self):
 		return '{} {} {}'.format(len(self.jobs), self.workload, self.stretch)
@@ -177,7 +184,7 @@ def heatmap(simulations, key, colorbar_range = 100):
 	heat = []
 	for i, j in v:
 		j = sorted(j.items(), key=lambda x: x[0])  # sort by stretch
-		heat.extend(map(lambda x: x[1], j))  # add values
+		heat.extend(map(lambda x: x[1], j))	 # add values
 
 	heat = np.array(heat)
 	heat.shape = (10, (max_y - 1) * 10)
@@ -442,7 +449,6 @@ def run_draw(args):
 		fig.tight_layout()
 		fig.savefig(os.path.join(out, fname), format='pdf', facecolor=fig.get_facecolor())
 
-
 if __name__=="__main__":
 	logging.basicConfig()
 	parser = argparse.ArgumentParser(description='Draw graphs from logs')
@@ -451,4 +457,5 @@ if __name__=="__main__":
 	parser.add_argument('--minlen', type=int, nargs="?", default=10, help="Round jobs' runtime to at least [10] seconds")
 	parser.add_argument('--bw', action="store_true", help="black&white color scheme")
 	parser.add_argument('--striplegend', action="store_true", help="pretty-print result name in legend; requires specific formatting of the input files")
+
 	run_draw(parser.parse_args())
