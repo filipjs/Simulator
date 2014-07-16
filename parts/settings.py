@@ -84,7 +84,8 @@ sim_templates = [
 		 ' long parts', 0, 'DAYS'),
 	Template('block_margin', 'Extra simulation time to fill up'
 		 ' and empty the cluster', 0, 'HOURS'),
-	Template('one_block', 'Simulate only the first block', False),
+	Template('one_block', 'Simulate only one block', False),
+	Template('block_number', 'Number of the one block to simulate', 0),
 	Template('serial', 'Serialize jobs to use at most `serial` number of CPUs', 0),
 	Template('cpu_count', 'Set a static number of CPUs, takes precedence', 0),
 	Template('cpu_percent', 'Set the number of CPUs to the P-th percentile', 70),
@@ -103,7 +104,7 @@ class Settings(object):
 		"""
 		Args:
 		  templates: a list of `Template` instances.
-		  **kwargs: values for the settings.
+		  **kwargs: settings values.
 		"""
 		for temp in templates:
 			value = kwargs[temp.name]

@@ -376,7 +376,12 @@ def run(workload, args):
 	blocks = divide_jobs(jobs, sim_conf.job_id, sim_conf.block_time,
 			     sim_conf.block_margin)
 	if sim_conf.one_block:
-		blocks = blocks[:1]
+		if sim_conf.block_number >= len(blocks):
+			logging.error('Block number [%s] out of range'
+			              % sim_conf.block_number)
+			sys.exit(1)
+		else:
+			blocks = [ blocks[sim_conf.block_number] ]
 
 	results = {sched: [] for sched in part_conf.schedulers}
 	global_start = time.time()
@@ -412,8 +417,13 @@ def run(workload, args):
 
 	for sched, sched_results in results.iteritems():
 		time_stamp = time.localtime(global_start)
+
+		title = sim_conf.title
+		if sim_conf.one_block:
+			title += '-b%s' % sim_conf.block_number
+
 		filename = '{}-{}-{}'.format(
-			sim_conf.title,
+			title,
 			sched,
 			time.strftime('%b%d_%H-%M', time_stamp)
 		)
