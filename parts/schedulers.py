@@ -133,8 +133,8 @@ class Fairshare(BaseScheduler):
 		else:
 			user = job.user
 			effective = user.cpu_clock_used / self._stats.total_usage
-			shares_norm = user.shares  # already normalized
-			fairshare = 2.0 ** -(effective / shares_norm)
+			#shares_norm = user.shares  # already normalized
+			fairshare = 2.0 ** -(effective / user.shares)
 		prio = int(fairshare * 100000)  # higher value -> higher priority
 		# TODO if needed change the constant to a configuration setting
 		# TODO and add more components to the priority value

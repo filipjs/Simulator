@@ -305,6 +305,17 @@ class GeneralSimulator(object):
 				msg = 'Block {:2} scheduler {}: {} completed {:.2f}%'
 				logging.info(msg.format(self._block.number, self._parts.scheduler,
 						 time.strftime('%H:%M:%S'), comp * 100))
+				if self._waiting_jobs:
+					top_prio = self._waiting_jobs[-1].proc
+				else:
+					top_prio = -1
+				logging.info('events {} {}  |  cpus {} {}  |  waiting jobs {} {}'
+					     '  |  sched stats {} {}  |  bf stats {} {}'.format(
+						sub_iter, end_iter,
+						self._stats.cpu_used, self._cpu_free, 
+						len(self._waiting_jobs), top_prio,
+						self._diag.sched_jobs, self._diag.sched_pass,
+						self._diag.bf_jobs, self._diag.bf_pass))
 
 		self._finalize()
 		# Results for each user should be in this order:
