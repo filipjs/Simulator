@@ -310,12 +310,14 @@ class GeneralSimulator(object):
 				else:
 					top_prio = -1
 				logging.info('events {} {}  |  cpus {} {}  |  waiting jobs {} {}'
-					     '  |  sched stats {} {}  |  bf stats {} {}'.format(
+					     '  |  stats {:.2f} {:.2f} {:.2f}'.format(
 						sub_iter, end_iter,
 						self._stats.cpu_used, self._cpu_free, 
 						len(self._waiting_jobs), top_prio,
-						self._diag.sched_jobs, self._diag.sched_pass,
-						self._diag.bf_jobs, self._diag.bf_pass))
+						(self._diag.avg_util['sum'] / 
+						self._diag.avg_util['period']),
+						self._diag.sched_jobs / float(sub_iter),
+						self._diag.bf_jobs / float(sub_iter)))
 
 		self._finalize()
 		# Results for each user should be in this order:
