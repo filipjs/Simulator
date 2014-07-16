@@ -10,6 +10,8 @@ import numpy as np
 import os
 import sys
 import logging
+from ast import literal_eval
+
 
 class Job(object):
 	short_len = 10
@@ -299,6 +301,9 @@ def parse(filename):
 	users = {}
 	utility = []
 
+	workload = None
+	last_block = None
+
 	f = open(filename)
 	# check file validity
 	for line in f:
@@ -306,12 +311,24 @@ def parse(filename):
 			continue  # skip comments
 		else:
 			assert line[0] == '{', 'missing context'
+			context = literal_eval(line)
+			workload = context['workload']
+			last_block = context.get('block_number', 0)
 			break
 
 	block_camps = {}
 	block_cpus = None
 
 	for line in f:
+		if line[0] == '#':
+			continue  # skip comments
+		if line[0] == '{':
+			context = literal_eval(line)
+			assert workload == context['workload'], 'different workloads'
+			assert last_block < context.get('block_number', 0), 'blocks out of order'
+			last_block = context.get('block_number', 0)
+			continue
+
 		tokens = line.split()
 		event, rest = tokens[0], to_val(tokens[1:])
 
@@ -431,7 +448,7 @@ def run_draw(args):
 		(average_per_user, "jobs", 2),
 		(average_per_user, "campaigns", 2),
 		(utility, "total", None),
-		(heatmap, "campaigns", None),
+		#(heatmap, "campaigns", None),
 	]
 
 	for i, (g, key, legend) in enumerate(graphs):
