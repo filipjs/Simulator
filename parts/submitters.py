@@ -68,10 +68,9 @@ class FromWorkloadSubmitter(BaseSubmitter):
 	"""
 
 	def _get_limit(self, job):
-		if job.time_limit:
-			return job.time_limit
-		else:  # time limit is missing
-			return job.run_time
+		# Fix missing or erroneous time limits, otherwise
+		# those jobs will be killed by the simulator.
+		return max(job.run_time, job.time_limit)
 
 class DefaultTimeSubmitter(BaseSubmitter):
 	"""
