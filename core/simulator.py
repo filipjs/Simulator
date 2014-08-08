@@ -158,6 +158,29 @@ class GeneralSimulator(object):
 		# clear the link to the scheduler
 		self._parts.scheduler.clear_stats()
 
+	def _log_progress(self, submitted, completed):
+		"""
+		Display the simulation progress with some statistical data.
+		"""
+		msg = 'Block {:2} scheduler {}: {} completed {:.2f}%'
+
+		logging.info(msg.format(self._block.number, self._parts.scheduler,
+					 time.strftime('%H:%M:%S'), completed * 100))
+
+		if self._waiting_jobs:
+			top_proc = self._waiting_jobs[-1].proc
+		else:
+			top_proc = -1
+
+		logging.info('cpus {} {} | waiting jobs {} {} |'
+					 'util {:.2f} | scheduling {:.2f} {:.2f}'.format(
+					 self._stats.cpu_used, self._cpu_free,
+					 len(self._waiting_jobs), top_proc,
+					 self._diag.avg_util['sum'] / self._diag.avg_util['period'],
+					 self._diag.sched_jobs / float(submitted),
+					 self._diag.bf_jobs / float(submitted)
+		))
+
 	def run(self):
 		"""
 		Proceed with the simulation.
@@ -171,9 +194,6 @@ class GeneralSimulator(object):
 		#   There is also a dummy `force_decay` event inserted into
 		#   the queue to force the calculations in case the gap
 		#   between consecutive events would be too long.
-		#TODO ZAMIENIC APPLY DECAY NA BACKGROUND THREAD TAK SAMO JAK BACKFILLING?!?!?!
-		#TODO WTEDY BEDZIE TRZEBA TRZYMAC "TEMPORARY" USAGE GDZIES ODDZIELNIE I GO DODAWAC
-		#TODO DO GLOWNEGO DOPIERO PRZY URUCHOMIENIU TEGO "THREADA"
 		self._force_period = 60 * 5
 
 		self._initialize()
@@ -191,8 +211,7 @@ class GeneralSimulator(object):
 		self._diag.prev_util['time'] = prev_event
 
 		visual_update = 60  # notify the user about the progress
-		#TODO DODAC POZA CZASEM TEZ PROCENTOWO CO 25%
-		next_visual = time.time() + visual_update
+		next_visual = time.time()
 
 		while sub_iter < sub_total or not self._pq.empty():
 			# We only need to keep two `new_job` events in the
@@ -300,24 +319,9 @@ class GeneralSimulator(object):
 
 			# progress report
 			if time.time() > next_visual:
+				completed = float(sub_iter + end_iter) / (2 * sub_total)
+				self._log_progress(sub_iter, completed)
 				next_visual += visual_update
-				comp = float(sub_iter + end_iter) / (2 * sub_total)
-				msg = 'Block {:2} scheduler {}: {} completed {:.2f}%'
-				logging.info(msg.format(self._block.number, self._parts.scheduler,
-						 time.strftime('%H:%M:%S'), comp * 100))
-				if self._waiting_jobs:
-					top_prio = self._waiting_jobs[-1].proc
-				else:
-					top_prio = -1
-				logging.info('events {} {}  |  cpus {} {}  |  waiting jobs {} {}'
-					     '  |  stats {:.2f} {:.2f} {:.2f}'.format(
-						sub_iter, end_iter,
-						self._stats.cpu_used, self._cpu_free,
-						len(self._waiting_jobs), top_prio,
-						(self._diag.avg_util['sum'] /
-						self._diag.avg_util['period']),
-						self._diag.sched_jobs / float(sub_iter),
-						self._diag.bf_jobs / float(sub_iter)))
 
 		self._finalize()
 		# Results for each user should be in this order:
