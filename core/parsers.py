@@ -106,17 +106,10 @@ class BaseParser(object):
 
 		Returned values **MUST** be integer type.
 		"""
-		try:
-			values = map(int, line.split())
-		except ValueError:
-			# PIK-IPLEX trace uses float in field #6
-			values = line.split()
-			for i in range(0, len(values)):
-				if i==5:
-					values[i] = float(values[i])
-				else:
-					values[i] = int(values[i])
-		return {name: values[field] for name, field in self.fields.iteritems() }
+		values = map(float, line.split())
+		values = map(int, values)
+		return {name: values[field]
+				for name, field in self.fields.iteritems()}
 
 	def _validate(self, stats, ids=set()):
 		"""
@@ -149,7 +142,7 @@ class BaseParser(object):
 
 		for name in self.OPTIONAL:
 			stats[name] = stats.get(name, 0)
-			
+
 		for name in stats:
 			stats[name] = max(0, stats[name])
 
