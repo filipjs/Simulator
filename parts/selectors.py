@@ -85,7 +85,8 @@ class VirtualSelector(BaseSelector):
 			last = user.completed_camps[-1]
 			if job.submit < last.created + self._settings.threshold:
 				# move the campaign back to the active ones
-				user.completed_camps.pop()
+				l2 = user.completed_camps.pop()
+				assert last == l2, 'selected wrong campaign'
 				user.active_camps.append(last)
 				return last
 		# we need a new campaign

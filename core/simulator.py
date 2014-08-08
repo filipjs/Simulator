@@ -312,9 +312,9 @@ class GeneralSimulator(object):
 				logging.info('events {} {}  |  cpus {} {}  |  waiting jobs {} {}'
 					     '  |  stats {:.2f} {:.2f} {:.2f}'.format(
 						sub_iter, end_iter,
-						self._stats.cpu_used, self._cpu_free, 
+						self._stats.cpu_used, self._cpu_free,
 						len(self._waiting_jobs), top_prio,
-						(self._diag.avg_util['sum'] / 
+						(self._diag.avg_util['sum'] /
 						self._diag.avg_util['period']),
 						self._diag.sched_jobs / float(sub_iter),
 						self._diag.bf_jobs / float(sub_iter)))
@@ -366,7 +366,8 @@ class GeneralSimulator(object):
 		self._stats.total_usage *= real_decay
 		# and update users usage
 		for u in self._users.itervalues():
-			u.real_work(period, real_decay)
+			u.real_work(period)
+			u.cpu_clock_used *= real_decay
 
 	def _share_cpu_value(self, user):
 		"""

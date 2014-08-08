@@ -216,13 +216,11 @@ class User(object):
 		self._virt_pool = 0
 		self.lost_virtual += total
 
-	def real_work(self, value, real_decay):
+	def real_work(self, value):
 		"""
 		Process the `value` long period in the real schedule.
-		Apply the decay factor `real_decay`.
 		"""
 		self.cpu_clock_used += self._occupied_cpus * value
-		self.cpu_clock_used *= real_decay
 
 	def add_job(self, job):
 		self.active_jobs.append(job)

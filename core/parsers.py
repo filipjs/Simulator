@@ -134,9 +134,9 @@ class BaseParser(object):
 		for name in self.REQUIRED:
 			if name in stats:
 				if name in non_negative and stats[name] < 0:
-					err = name + 'has negative value'
+					err = name + ' has negative value'
 			else:
-				err = name + 'value is missing'
+				err = name + ' value is missing'
 
 		if err is None:
 			if stats['job_id'] in ids:
