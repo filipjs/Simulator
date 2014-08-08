@@ -81,14 +81,16 @@ sim_templates = [
 	Template('title', 'The title of the simulation', 'mytitle'),
 	Template('job_id', 'Start from the job with this ID', 0),
 	Template('block_time', 'Divide the simulation in `block_time`'
-		 ' long parts', 0, 'DAYS'),
+			 ' long parts', 0, 'DAYS'),
 	Template('block_margin', 'Extra simulation time to fill up'
-		 ' and empty the cluster', 0, 'HOURS'),
+			 ' and empty the cluster', 0, 'HOURS'),
 	Template('one_block', 'Simulate only one block', False),
 	Template('block_number', 'Number of the one block to simulate', 0),
 	Template('serial', 'Serialize jobs to use at most `serial` number of CPUs', 0),
 	Template('cpu_count', 'Set a static number of CPUs, takes precedence', 0),
 	Template('cpu_percent', 'Set the number of CPUs to the P-th percentile', 70),
+	Template('update_time', 'The time interval of the simulation'
+			 ' progress display', 60, 'SEC'),
 	Template('output', 'Directory to store the results in', 'sim_results'),
 ]
 

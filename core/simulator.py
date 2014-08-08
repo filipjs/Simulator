@@ -210,8 +210,8 @@ class GeneralSimulator(object):
 		prev_event = self._block[0].submit
 		self._diag.prev_util['time'] = prev_event
 
-		visual_update = 60  # notify the user about the progress
-		next_visual = time.time()
+		# time to notify the user about the simulation progress
+		next_visual_update = time.time()
 
 		while sub_iter < sub_total or not self._pq.empty():
 			# We only need to keep two `new_job` events in the
@@ -318,10 +318,10 @@ class GeneralSimulator(object):
 				self._next_force_decay()
 
 			# progress report
-			if time.time() > next_visual:
+			if time.time() > next_visual_update:
 				completed = float(sub_iter + end_iter) / (2 * sub_total)
 				self._log_progress(sub_iter, completed)
-				next_visual += visual_update
+				next_visual_update += self._settings.update_time
 
 		self._finalize()
 		# Results for each user should be in this order:
@@ -413,10 +413,10 @@ class GeneralSimulator(object):
 		if (not self._settings.bf_depth or
 		    not self._settings.bf_interval):
 			return  # backfilling 'thread' turned off
-		next = float(start) / self._settings.bf_interval
-		next = math.ceil(next) * self._settings.bf_interval
+		next_bf = float(start) / self._settings.bf_interval
+		next_bf = math.ceil(next_bf) * self._settings.bf_interval
 		self._pq.add(
-			int(next),  # must be int
+			int(next_bf),  # must be int
 			Events.bf_run,
 			'Backfill event'
 		)
