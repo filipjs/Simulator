@@ -167,16 +167,15 @@ class GeneralSimulator(object):
 		logging.info(msg.format(self._block.number, self._parts.scheduler,
 					 time.strftime('%H:%M:%S'), completed * 100))
 
-		if self._waiting_jobs:
-			top_proc = self._waiting_jobs[-1].proc
-		else:
-			top_proc = -1
+		top_proc = self._waiting_jobs and self._waiting_jobs[-1].proc
+		util = (self._diag.avg_util['period'] and
+			   (self._diag.avg_util['sum'] / self._diag.avg_util['period']))
 
-		logging.info('cpus {} {} | waiting jobs {} {} |'
-					 'util {:.2f} | scheduling {:.2f} {:.2f}'.format(
+		logging.info('cpus {} {} | waiting jobs {} {} | util {:.2f}'
+					 ' | scheduling {:.2f} {:.2f}'.format(
 					 self._stats.cpu_used, self._cpu_free,
 					 len(self._waiting_jobs), top_proc,
-					 self._diag.avg_util['sum'] / self._diag.avg_util['period'],
+					 util,
 					 self._diag.sched_jobs / float(submitted),
 					 self._diag.bf_jobs / float(submitted)
 		))

@@ -65,6 +65,8 @@ alg_templates = [
 	Template('bf_window', 'The amount of time to look into the future'
 		 ' when considering jobs for backfilling', 24, 'HOURS'),
 	Template('bf_interval', 'The time between backfilling iterations', 5, 'MINS'),
+	Template('update_time', 'The time interval of the simulation'
+			 ' progress display', 60, 'SEC'),
 ]
 
 # You can change the default classes here.
@@ -89,8 +91,6 @@ sim_templates = [
 	Template('serial', 'Serialize jobs to use at most `serial` number of CPUs', 0),
 	Template('cpu_count', 'Set a static number of CPUs, takes precedence', 0),
 	Template('cpu_percent', 'Set the number of CPUs to the P-th percentile', 70),
-	Template('update_time', 'The time interval of the simulation'
-			 ' progress display', 60, 'SEC'),
 	Template('output', 'Directory to store the results in', 'sim_results'),
 ]
 

@@ -294,7 +294,7 @@ def simulate_block(block, sched, alg_conf, part_conf):
 		sys.exit(0)
 
 
-def setup_logging(debug, config=""):
+def setup_logging(debug, config):
 	"""
 	Set the root logger.
 	"""
@@ -304,7 +304,7 @@ def setup_logging(debug, config=""):
 		lvl = 15
 	fmt = '%(levelname)s: %(message)s'
 	logging.basicConfig(
-		filename='sim-'+config+'.log',
+		filename='sim-%s.log' % config,
 		filemode='w',
 		format=fmt,
 		level=lvl
@@ -358,7 +358,7 @@ def run(workload, args):
 		if j.run_time > j.time_limit:
 			j.run_time = j.time_limit
 			killed += 1
-	
+
 	if killed:
 		logging.warn('%s jobs will end prematurely due to insufficient'
 		             ' time limit' % killed)
@@ -648,10 +648,14 @@ if __name__=="__main__":
 	args = vars(parser.parse_args())
 
 	if args['command'] == 'run':
-		# setup mode of execution
+		# get the config file name
+		configs = [arg[1:] for arg in sys.argv if arg[0] == '@']
+		used_conf = (configs and configs[-1]) or ''
+		# determine the mode
 		PROFILE_FLAG = args.pop('profile')
-		config_filename = [arg[1:] for arg in sys.argv if arg[0]=='@'][0]
-		setup_logging(PROFILE_FLAG and args.pop('debug'), config_filename)
+		debug = args.pop('debug')
+		# enable logger module
+		setup_logging(PROFILE_FLAG and debug, used_conf)
 		# and go!
 		run(args['workload'], args)
 	elif args['command'] == 'config':
