@@ -573,9 +573,12 @@ To read the options from a config file:
     `%(prog)s run @myconfig workload_file`
 
 You can generate a template of the configuration:
-    `%(prog)s config --generate`.
+    `%(prog)s config --generate > my_conf`.
 You can also recreate a config from a simulation:
-    `%(prog)s config --recreate sim_file`
+    `%(prog)s config --recreate sim_file > my_conf`
+
+To display some workload statistics:
+    `%(prog)s stats workload_file
 ----------------------------------------------------------------
 """.format(run_opts)
 
