@@ -259,10 +259,15 @@ def simulate_block(block, sched, alg_conf, part_conf):
 	users = {}
 
 	for j in block:
+		assert not hasattr(j, 'camp'), 'job not reset'
 		j.reset()
+		assert hasattr(j, 'camp'), 'invalid job reset'
 		users[j.user.ID] = j.user
+
 	for u in users.itervalues():
+		assert not hasattr(u, 'active_camps'), 'user not reset'
 		u.reset()
+		assert hasattr(u, 'active_camps'), 'invalid user reset'
 
 	part_conf.scheduler = sched
 	params = (block, users, alg_conf, part_conf)
@@ -278,14 +283,7 @@ def simulate_block(block, sched, alg_conf, part_conf):
 	logging.log(15, '{} using {}'.format(sched, my_sim))
 
 	if not PROFILE_FLAG:
-		r = my_sim.run()
-		# restore original values
-		#TODO TO POWINNO BYC JEDNAK USELESS SKORO JEST WSZYSTKO KOPIOWANE!!
-		for j in block:
-			j.reset()
-		for u in users.itervalues():
-			u.reset()
-		return r
+		return my_sim.run()
 	else:
 		import cProfile
 		cProfile.runctx('print my_sim.run()[1].__dict__',
@@ -358,7 +356,6 @@ def run(workload, args):
 		if j.run_time > j.time_limit:
 			j.run_time = j.time_limit
 			killed += 1
-
 	if killed:
 		logging.warn('%s jobs will end prematurely due to insufficient'
 		             ' time limit' % killed)
