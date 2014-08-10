@@ -15,6 +15,7 @@ from parts import settings
 
 
 PROFILE_FLAG = False
+PAGE_BREAK = '-' * 50
 
 
 ##
@@ -169,26 +170,6 @@ def cpu_percentile(block, percentile):
 		raise Exception('invalid percentile %s' % percentile)
 
 
-def threshold_percentile(jobs):
-	"""
-	TODO jak/kiedy to uruchamiac??
-	"""
-	last_sub = {}
-	values = []
-
-	for j in jobs:
-		jid = j.user.ID
-		if jid in last_sub:
-			values.append(j.submit - last_sub[jid])
-		last_sub[jid] = j.submit
-
-	values.sort()
-	for i in xrange(50, 100):
-		p = i / 100.
-		inx = int(p * len(values))
-		print p, values[inx]
-
-
 def make_classes(name, conf, modules=[]):
 	"""
 	Return an instance of the class `name` from the ``parts`` package.
@@ -217,7 +198,7 @@ def make_classes(name, conf, modules=[]):
 		raise Exception('class not found %s' % name)
 
 
-def print_stats(diag):
+def print_runtime_stats(diag):
 	"""
 	Print the diagnostic statistics from a simulation.
 	"""
@@ -344,9 +325,8 @@ def run(workload, args):
 		setattr(part_conf, key, make_classes(value, alg_conf))
 
 	# parse the workload
-	parser = parsers.get_parser(workload)
-
-	jobs, users = parser.parse_workload(workload, sim_conf.serial)
+	my_parser = parsers.get_parser(workload)
+	jobs, users = my_parser.parse_workload(workload, sim_conf.serial)
 	jobs.sort(key=lambda j: j.submit)  # order by submit time
 
 	# set job time limit and validate run time
@@ -383,7 +363,7 @@ def run(workload, args):
 	results = {sched: [] for sched in part_conf.schedulers}
 	global_start = time.time()
 
-	print '-' * 50
+	logging.info(PAGE_BREAK)
 	logging.info('Simulation started. Block count %s' % len(blocks))
 
 	for bl in blocks:
@@ -444,7 +424,7 @@ def run(workload, args):
 			else:
 				r, diag = sim_result
 
-			print_stats(diag)
+			print_runtime_stats(diag)
 			# save partial results to file
 			f.write('BLOCK START %s\n' % blocks[i].cpus)
 			f.write(zlib.decompress(r))
@@ -452,11 +432,11 @@ def run(workload, args):
 		f.close()
 
 		logging.info('Results saved to file %s' % filename)
-		print '-' * 50
+		logging.info(PAGE_BREAK)
 
 	logging.info('Simulation completed. Total run time %.2f'
 		     % (time.time() - global_start))
-	print '-' * 50
+	logging.info(PAGE_BREAK)
 
 	if run_async:
 		my_pool.close()
@@ -515,6 +495,67 @@ def config(args):
 	map(print_template, settings.alg_templates)
 	print '\n##\n## Part selection parameters\n##\n'
 	map(print_template, settings.part_templates)
+
+
+##
+## Action ``stats``.
+##
+
+
+def threshold_percentile(jobs):
+	"""
+	Display the inter-arrival statistic.
+	"""
+	last_sub = {}
+	values = []
+
+	for j in jobs:
+		jid = j.user.ID
+		if jid in last_sub:
+			values.append(j.submit - last_sub[jid])
+		last_sub[jid] = j.submit
+
+	logging.info('Legend: inter-arrival cdf, time in seconds')
+	values.sort()
+	for i in xrange(70, 100):
+		p = i / 100.
+		inx = int(p * len(values))
+		logging.info('{:.2f} {}'.format(p, values[inx]))
+	logging.info(PAGE_BREAK)
+
+
+def top_usage(jobs):
+	"""
+	Display the usage of the most active users.
+	"""
+	usage = {}
+	total = 0.
+
+	for j in jobs:
+		jid = j.user.ID
+		usage[jid] = usage.get(jid, 0) + j.run_time * j.proc
+		total += j.run_time * j.proc
+
+	logging.info('Legend: user ID, percent of total usage')
+	usage = sorted(usage.iteritems(), key=lambda x: x[1], reverse=True)
+	rest = total
+	for i in range(min(5, len(usage))):
+		logging.info('{:>4} {:.2f}'.format(
+			usage[i][0],
+			usage[i][1] / total * 100
+		))
+		rest -= usage[i][1]
+	logging.info('rest {:.2f}'.format(rest / total * 100))
+	logging.info(PAGE_BREAK)
+
+
+def display_stats(workload, args):
+
+	my_parser = parsers.get_parser(workload)
+	jobs, users = my_parser.parse_workload(workload, 0)
+
+	threshold_percentile(jobs)
+	top_usage(jobs)
 
 
 ##
@@ -642,13 +683,17 @@ if __name__=="__main__":
 	action_group.add_argument('--recreate', metavar='SIM FILE',
 				  help='Recreate the configuration from a simulation')
 
+	# stats parser
+	stats_parser = subparsers.add_parser('stats', help='Display various statistics')
+	stats_parser.add_argument('workload', help='The workload file')
+
 	args = vars(parser.parse_args())
 
 	if args['command'] == 'run':
 		# get the config file name
 		configs = [arg[1:] for arg in sys.argv if arg[0] == '@']
-		used_conf = (configs and configs[-1]) or ''
-		# determine the mode
+		used_conf = (configs and configs[-1]) or None
+		# extract flags
 		PROFILE_FLAG = args.pop('profile')
 		debug = args.pop('debug')
 		# enable logger module
@@ -657,5 +702,8 @@ if __name__=="__main__":
 		run(args['workload'], args)
 	elif args['command'] == 'config':
 		config(args)
+	elif args['command'] == 'stats':
+		setup_logging(False, 'stats')
+		display_stats(args['workload'], args)
 	else:
 		print "Hmm...", args['command']
