@@ -97,7 +97,7 @@ class NaiveEstimator(BaseEstimator):
 
 
 class PreviousNEstimator(BaseEstimator):
-        """
+    """
     Computes the estimation as an average from N last completed jobs.
 
     Uses `_settings.last_completed` as N.

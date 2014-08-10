@@ -81,7 +81,7 @@ class BaseParser(object):
         if skipped:
             logging.warn('Skipped %s incomplete job records' % skipped)
         logging.info('Parsing completed. Retrieved {} job records and {}'
-                 ' user records.'.format(len(self.jobs), len(self.users)))
+                     ' user records.'.format(len(self.jobs), len(self.users)))
         return self.jobs, self.users
 
     def _next_job(self, stats):

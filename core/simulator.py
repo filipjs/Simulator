@@ -116,7 +116,7 @@ class GeneralSimulator(object):
         self._parts = parts
         # create an appropriate cluster manager
         self._manager = cluster_managers.BaseManager(
-                        block.cpus, settings)
+                            block.cpus, settings)
 
     def _initialize(self):
         """
@@ -151,7 +151,7 @@ class GeneralSimulator(object):
         # finalize diagnostic stats
         del self._diag.prev_util
         self._diag.avg_util = (self._diag.avg_util['sum'] /
-                       self._diag.avg_util['period'])
+                               self._diag.avg_util['period'])
         self._diag.sim_time = time.time() - self._diag.sim_time
         self._diag.sched_jobs /= float(len(self._block))
         self._diag.bf_jobs /= float(len(self._block))
@@ -203,7 +203,7 @@ class GeneralSimulator(object):
 
         schedule = backfill = False
         instant_bf = (self._settings.bf_depth and
-                  not self._settings.bf_interval)
+                      not self._settings.bf_interval)
 
         # the first job submission is the simulation 'time zero'
         prev_event = self._block[0].submit
@@ -651,8 +651,8 @@ class GeneralSimulator(object):
           [CORE/MARG] CAMP START camp_id user_id creation_time utility
         """
         msg = 'CAMP START {} {} {} {:.4f}\n'.format(
-            camp.ID, camp.user.ID, camp.created,
-            self._utility)
+               camp.ID, camp.user.ID, camp.created,
+               self._utility)
         self._store_prefix(camp.created, msg)
 
     def _store_camp_ended(self, camp):
@@ -663,8 +663,8 @@ class GeneralSimulator(object):
         """
         real_end = camp.completed_jobs[-1].end_time
         msg = 'CAMP END {} {} {} {} {}\n'.format(
-            camp.ID, camp.user.ID, real_end,
-            camp.workload, len(camp.completed_jobs))
+               camp.ID, camp.user.ID, real_end,
+               camp.workload, len(camp.completed_jobs))
         self._store_prefix(camp.created, msg)
 
     def _store_job_ended(self, job):
@@ -674,9 +674,9 @@ class GeneralSimulator(object):
                           final_estimate time_limit processor_count
         """
         msg = 'JOB {} {} {} {} {} {} {} {} {}\n'.format(
-            job.ID, job.camp.ID, job.user.ID,
-            job.submit, job.start_time, job.end_time,
-            job.estimate, job.time_limit, job.proc)
+               job.ID, job.camp.ID, job.user.ID,
+               job.submit, job.start_time, job.end_time,
+               job.estimate, job.time_limit, job.proc)
         self._store_prefix(job.submit, msg)
 
     def _store_user_stats(self, user):
@@ -686,9 +686,9 @@ class GeneralSimulator(object):
                false_inactivity_period
         """
         msg = 'USER {} {} {} {} {}\n'.format(
-            user.ID, len(user.completed_jobs),
-            len(user.completed_camps),
-            user.lost_virtual, user.false_inactivity)
+               user.ID, len(user.completed_jobs),
+               len(user.completed_camps),
+               user.lost_virtual, user.false_inactivity)
         self._save(msg)
 
     def _store_utility(self, period, value):

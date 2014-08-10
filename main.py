@@ -71,7 +71,7 @@ class Block(object):
         s = 'Block {:2} (core id {}): {} jobs' \
             ' (inc. {} margin jobs), {} CPUs'
         return s.format(self.number, self._first_core.ID,
-            len(self), self.margin_count, self.cpus)
+                len(self), self.margin_count, self.cpus)
 
 
 def divide_jobs(jobs, first_job, block_time, block_margin):
@@ -351,7 +351,7 @@ def run(workload, args):
 
     # divide into blocks
     blocks = divide_jobs(jobs, sim_conf.job_id, sim_conf.block_time,
-                 sim_conf.block_margin)
+                         sim_conf.block_margin)
     if sim_conf.one_block:
         if sim_conf.block_number >= len(blocks):
             logging.error('Block number [%s] out of range'
@@ -389,7 +389,7 @@ def run(workload, args):
     if run_async:
         for sched_results in results.itervalues():
             for sim_result in sched_results:
-                # ctr-c doesn't seem to work without a timeout
+                # ctr-c doesn't work without a timeout
                 sim_result.wait(60*60*24*365)
 
     for sched, sched_results in results.iteritems():
@@ -435,7 +435,7 @@ def run(workload, args):
         logging.info(PAGE_BREAK)
 
     logging.info('Simulation completed. Total run time %.2f'
-             % (time.time() - global_start))
+                 % (time.time() - global_start))
     logging.info(PAGE_BREAK)
 
     if run_async:
@@ -485,9 +485,9 @@ def config(args):
 
         print '--{:15}{}'.format(temp.name, str_value(value))
         print '# {}: (default) {} {}'.format(
-                   temp.desc, str_value(temp.default), unit)
+              temp.desc, str_value(temp.default), unit)
         if temp.loc is not None:
-            print '# Used by `{}` class.'.format(temp.loc)
+            print '## Used by `{}` class.'.format(temp.loc)
 
     print '\n##\n## General simulation parameters\n##\n'
     map(print_template, settings.sim_templates)
@@ -603,8 +603,8 @@ def arguments_from_templates(parser, templates):
         assert temp.default is not None, 'invalid default value'
 
         opts = {'metavar': temp.time_unit,
-            'default': temp.default,
-            'help': temp.desc}
+                'default': temp.default,
+                'help': temp.desc}
 
         ftypes = {bool: str2bool,
               int: functools.partial(positive, int),
@@ -659,13 +659,13 @@ if __name__=="__main__":
 
     # run simulation parser
     run_parser = subparsers.add_parser('run', help='Run a simulation',
-                       usage='%(prog)s {}'.format(run_opts),
-                       fromfile_prefix_chars='@',
-                       formatter_class=MyHelpFormatter)
+                                       usage='%(prog)s {}'.format(run_opts),
+                                       fromfile_prefix_chars='@',
+                                       formatter_class=MyHelpFormatter)
     run_parser.add_argument('--profile', action='store_true',
-                help='Run a time profiler instead of the normal simulation')
+        help='Run a time profiler instead of the normal simulation')
     run_parser.add_argument('--debug', action='store_true',
-                help='Set the logger level to DEBUG')
+        help='Set the logger level to DEBUG')
     run_parser.add_argument('workload', help='The workload file')
 
     sim_group = run_parser.add_argument_group('General simulation parameters')
@@ -682,9 +682,9 @@ if __name__=="__main__":
 
     action_group = config_parser.add_mutually_exclusive_group(required=True)
     action_group.add_argument('--generate', action='store_true',
-                  help='Generate a new configuration template.')
+        help='Generate a new configuration template.')
     action_group.add_argument('--recreate', metavar='SIM FILE',
-                  help='Recreate the configuration from a simulation')
+        help='Recreate the configuration from a simulation')
 
     # stats parser
     stats_parser = subparsers.add_parser('stats', help='Display various statistics')
