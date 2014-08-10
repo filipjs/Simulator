@@ -8,9 +8,6 @@ from abc import ABCMeta, abstractmethod
 from entities import Job, User
 
 
-class InvalidStatsError(Exception): pass
-
-
 def get_parser(filename):
     """
     Return a parser based on the file extension.
@@ -51,7 +48,10 @@ class BaseParser(object):
         """
         self.jobs = []
         self.users = {}
-        skipped = 0
+
+        self._missing = 0
+        self._invalid = 0
+        self._serialized = 0
 
         f = open(filename)
         for i, line in enumerate(f):
@@ -61,27 +61,35 @@ class BaseParser(object):
                 continue
 
             stats = self._parse(line)
-            stats = self._validate(stats)
 
-            if stats['run_time'] <= 0 or stats['proc'] <= 0:
-                skipped += 1
-                continue  # skip incomplete data
+            if not self._validate(stats):
+                continue
+
             if serial:
                 max_proc = min(stats['proc'], serial)
                 count = stats['proc'] / max_proc
-                assert count > 0, 'invalid job count'
                 stats['proc'] = max_proc
             else:
                 count = 1
+
+            assert count > 0, 'invalid job count'
+            if count > 1:
+                self._serialized += (count - 1)
 
             for i in range(count):
                 self._next_job(stats)
         f.close()
 
-        if skipped:
-            logging.warn('Skipped %s incomplete job records' % skipped)
-        logging.info('Parsing completed. Retrieved {} job records and {}'
-                     ' user records.'.format(len(self.jobs), len(self.users)))
+        if self._missing:
+            logging.warn('Skipped %s incomplete job records' % self._missing)
+        if self._invalid:
+            logging.warn('Skipped %s invalid job records' % self._invalid)
+        logging.info('Parsing completed:')
+        logging.info('    Retrieved {} job records and {} user records'.format(
+                     len(self.jobs) - self._serialized, len(self.users)))
+        if self._serialized:
+            logging.info('    Serialization added {} extra jobs.'.format(
+                         self._serialized))
         return self.jobs, self.users
 
     def _next_job(self, stats):
@@ -117,36 +125,30 @@ class BaseParser(object):
           1) Check if `stats` contain required values.
           2) Check if the job has an unique ID.
           3) Fill in missing optional data.
-          4) Change negative values to zero.
-
-        Raises `InvalidStatsError`.
         """
-        non_negative = ['job_id', 'user_id', 'submit']
-        err = None
+        non_zero = ['run_time', 'proc']
 
         for name in self.REQUIRED:
             if name in stats:
-                if name in non_negative and stats[name] < 0:
-                    err = name + ' has negative value'
+                min_val = 1 if name in non_zero else 0
+                if stats[name] < min_val:
+                    self._invalid += 1
+                    return False
             else:
-                err = name + ' value is missing'
+                self._missing += 1
+                return False
 
-        if err is None:
-            if stats['job_id'] in ids:
-                err = 'duplicate ID number'
-            ids.add(stats['job_id'])
-
-        if err is not None:
-            msg = 'job {}: {}'.format(stats.get('job_id'), err)
-            raise InvalidStatsError(msg)
+        if stats['job_id'] in ids:
+            self._invalid += 1
+            return False
+        ids.add(stats['job_id'])
 
         for name in self.OPTIONAL:
-            stats[name] = stats.get(name, 0)
-
-        for name in stats:
-            stats[name] = max(0, stats[name])
-
-        return stats
+            if name in stats:
+                stats[name] = max(stats[name], 0)
+            else:
+                stats[name] = 0
+        return True
 
     @abstractmethod
     def _accept(self, line, num):
@@ -183,7 +185,7 @@ class DefaultParser(BaseParser):
             field_count = min(len(names), data_count)
 
             self.fields = {names[i]: i
-                       for i in range(field_count)}
+                           for i in range(field_count)}
             return True  # line with actual data
 
     def _accept(self, line, num):
@@ -247,17 +249,17 @@ class ICMParser(BaseParser):
         delta = timedelta(days=days, hours=t[0], minutes=t[1], seconds=t[2])
         return delta.total_seconds()
 
-    def _parse(self, line, users={}):
+    def _parse(self, line, uids={}):
         """
         Custom logic to parse ICM database extract.
         """
         stats = line.split('|')
         stats = {name: stats[field]
-            for name, field in self.fields.iteritems()}
+                 for name, field in self.fields.iteritems()}
 
-        if stats['user_id'] not in users:
-            users[stats['user_id']] = len(users) + 1
-        stats['user_id'] = users[stats['user_id']]
+        if stats['user_id'] not in uids:
+            uids[stats['user_id']] = len(uids) + 1
+        stats['user_id'] = uids[stats['user_id']]
         stats['submit'] = self._from_time_str(stats['submit'])
         stats['run_time'] = self._from_delta_str(stats['run_time'])
         stats['time_limit'] = self._from_delta_str(stats['time_limit'])
