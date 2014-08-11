@@ -308,7 +308,7 @@ def setup_logging(debug, config):
         lvl = 15
     fmt = '%(levelname)s: %(message)s'
     logging.basicConfig(
-        filename='sim-%s.log' % config,
+        filename='logs/sim-%s.log' % config.replace('/', '-'),
         filemode='w',
         format=fmt,
         level=lvl
@@ -426,7 +426,7 @@ def run(workload, args):
 
         title = sim_conf.title
         if sim_conf.one_block:
-            title += '-b%s' % sim_conf.block_number
+            title += '-b%02d' % sim_conf.block_number
 
         filename = '{}-{}-{}'.format(
             title,
@@ -724,7 +724,7 @@ if __name__=="__main__":
     if args['command'] == 'run':
         # get the config file name
         configs = [arg[1:] for arg in sys.argv if arg[0] == '@']
-        used_conf = (configs and configs[-1]) or None
+        used_conf = (configs and configs[-1]) or 'no_conf'
         # extract flags
         PROFILE_FLAG = args.pop('profile')
         debug = args.pop('debug')
