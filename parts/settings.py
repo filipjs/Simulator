@@ -89,6 +89,8 @@ sim_templates = [
     Template('one_block', 'Simulate only one block', False),
     Template('block_number', 'Number of the one block to simulate', 0),
     Template('serial', 'Serialize jobs to use at most `serial` number of CPUs', 0),
+    Template('skip_top', 'Try to fix flurries by removing `skip_top`'
+             ' most active users', 0),
     Template('cpu_count', 'Set a static number of CPUs, takes precedence', 0),
     Template('cpu_percent', 'Set the number of CPUs to the P-th percentile', 70),
     Template('output', 'Directory to store the results in', 'sim_results'),

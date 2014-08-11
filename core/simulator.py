@@ -210,7 +210,7 @@ class GeneralSimulator(object):
         self._diag.prev_util['time'] = prev_event
 
         # time to notify the user about the simulation progress
-        next_visual_update = time.time()
+        next_visual_update = time.time() + self._settings.update_time
 
         while sub_iter < sub_total or not self._pq.empty():
             # We only need to keep two `new_job` events in the

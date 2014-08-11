@@ -170,6 +170,31 @@ def cpu_percentile(block, percentile):
         raise Exception('invalid percentile %s' % percentile)
 
 
+def remove_top(jobs, users, count):
+    """
+    Remove the jobs of the `count` most active users.
+    """
+    assert count < len(users), 'too many to remove'
+
+    usage = {}
+    for j in jobs:
+        usage[j.user] = usage.get(j.user, 0) + j.run_time * j.proc
+    usage = sorted(usage.iteritems(), key=lambda x: x[1], reverse=True)
+
+    for i in range(count):
+        to_del = usage[i][0]
+        # mark jobs as None for now
+        for k, j in enumerate(jobs):
+            if j.user == to_del:
+                j.user = None # unlink
+                jobs[k] = None
+        # filter marked jobs all at once
+        jobs = filter(None, jobs)
+        # now delete the user
+        del users[to_del.ID]
+    return jobs, users
+
+
 def make_classes(name, conf, modules=[]):
     """
     Return an instance of the class `name` from the ``parts`` package.
@@ -328,6 +353,10 @@ def run(workload, args):
     my_parser = parsers.get_parser(workload)
     jobs, users = my_parser.parse_workload(workload, sim_conf.serial)
     jobs.sort(key=lambda j: j.submit)  # order by submit time
+
+    # remove some jobs if requested
+    if sim_conf.skip_top:
+        jobs, users = remove_top(jobs, users, sim_conf.skip_top)
 
     # set job time limit and validate run time
     killed = 0
@@ -607,9 +636,9 @@ def arguments_from_templates(parser, templates):
                 'help': temp.desc}
 
         ftypes = {bool: str2bool,
-              int: functools.partial(positive, int),
-              float: functools.partial(positive, float),
-              str: str}
+                  int: functools.partial(positive, int),
+                  float: functools.partial(positive, float),
+                  str: str}
 
         if isinstance(temp.default, list):
             # multiple values
