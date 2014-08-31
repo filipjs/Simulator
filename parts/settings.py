@@ -91,6 +91,7 @@ sim_templates = [
     Template('serial', 'Serialize jobs to use at most `serial` number of CPUs', 0),
     Template('skip_top', 'Try to fix flurries by removing `skip_top`'
              ' most active users', 0),
+    Template('pre_group', 'Group jobs into campaigns before submitting', False),
     Template('cpu_count', 'Set a static number of CPUs, takes precedence', 0),
     Template('cpu_percent', 'Set the number of CPUs to the P-th percentile', 70),
     Template('output', 'Directory to store the results in', 'sim_results'),

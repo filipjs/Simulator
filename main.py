@@ -319,6 +319,20 @@ def setup_logging(debug, config):
     logging.getLogger().addHandler(ch)
 
 
+def group_jobs(jobs, threshold):
+    """
+    Change the submit time of jobs to simulate campaigns.
+    """
+    last_camp = {}
+
+    for j in jobs:
+        jid = j.user.ID
+        if jid in last_camp:
+            if j.submit < last_camp[jid] + threshold:
+                j.submit = last_camp[jid]
+        last_camp[jid] = j.submit
+
+
 def run(workload, args):
     """
     Run the simulation described in `args` on the `workload`.
@@ -353,6 +367,12 @@ def run(workload, args):
     my_parser = parsers.get_parser(workload)
     jobs, users = my_parser.parse_workload(workload, sim_conf.serial)
     jobs.sort(key=lambda j: j.submit)  # order by submit time
+
+    for j in jobs:
+        j.run_time = max(j.run_time, 60)
+
+    if sim_conf.pre_group:
+        group_jobs(jobs, alg_conf.threshold)
 
     # remove some jobs if requested
     if sim_conf.skip_top:
@@ -568,7 +588,7 @@ def top_usage(jobs):
     logging.info('Legend: user ID, percent of total usage')
     usage = sorted(usage.iteritems(), key=lambda x: x[1], reverse=True)
     rest = total
-    for i in range(min(5, len(usage))):
+    for i in range(min(10, len(usage))):
         logging.info('{:>4} {:.2f}'.format(
             usage[i][0],
             usage[i][1] / total * 100

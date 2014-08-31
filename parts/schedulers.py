@@ -100,6 +100,28 @@ class OStrich(BaseScheduler):
             job.estimate, job.submit, job.ID)
 
 
+class FifoOStrich(BaseScheduler):
+    """
+    Implementation of the OStrich algorithm.
+    """
+
+    only_virtual = True
+
+    def job_priority_key(self, job):
+        """
+        Priority same as above, except jobs inside campaigns 
+        are ordered only by the submit time.
+        """
+        camp, user = job.camp, job.user
+        end = camp.time_left / user.shares  # lower value -> higher priority
+        # The `end` should be further multiplied by
+        #   `_stats.active_shares` / `_stats.cpu_used`.
+        # However, that gives the same value for all the jobs
+        # and we only need the ordering, not the absolute value.
+        return (end, camp.created, user.ID, camp.ID,
+            job.submit, job.ID)
+
+
 class Fairshare(BaseScheduler):
     """
     Implementation of the SLURM multifactor plugin.
