@@ -230,6 +230,9 @@ class User(object):
         self._occupied_cpus += job.proc
 
     def job_ended(self, job):
+        assert (not self.completed_jobs or 
+                job.end_time >= self.completed_jobs[-1].end_time), \
+                'job out of order'
         # update the processor count
         self._occupied_cpus -= job.proc
         self.active_jobs.remove(job)

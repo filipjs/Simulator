@@ -366,6 +366,10 @@ def run(workload, args):
     # parse the workload
     my_parser = parsers.get_parser(workload)
     jobs, users = my_parser.parse_workload(workload, sim_conf.serial)
+
+    for job in jobs:
+        job.submit = int(job.submit * sim_conf.time_factor)
+
     jobs.sort(key=lambda j: j.submit)  # order by submit time
 
     for j in jobs:
@@ -373,6 +377,9 @@ def run(workload, args):
 
     if sim_conf.pre_group:
         group_jobs(jobs, alg_conf.threshold)
+        # Order once more by submit time,
+        # grouping could break the ordering.
+        jobs.sort(key=lambda j: j.submit)
 
     # remove some jobs if requested
     if sim_conf.skip_top:
